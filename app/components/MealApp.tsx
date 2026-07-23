@@ -444,13 +444,13 @@ function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boo
                   [...CAT_ORDER, '기타'].map(cat => {
                     const ci = arr.filter(p => (p.category || '기타') === cat);
                     if (ci.length === 0) return null;
-                    return <div key={cat} style={{ marginBottom: 8 }}>
+                    return <div key={cat} className="fridge-box">
                       <div className="fridge-cat-label">{cat}</div>
                       <div className="chip-wrap">{ci.map(p => <StockChip key={p.id} p={p} />)}</div>
                     </div>;
                   })
                 ) : (
-                  <div className="chip-wrap">{arr.map(p => <StockChip key={p.id} p={p} />)}</div>
+                  <div className="fridge-box"><div className="chip-wrap">{arr.map(p => <StockChip key={p.id} p={p} />)}</div></div>
                 )}
               </div>
             );

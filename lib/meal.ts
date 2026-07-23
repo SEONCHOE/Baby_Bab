@@ -25,7 +25,7 @@ export function stageByMonths(months: number): Stage {
 // ── 냉장고 재고 ─────────────────────────────────────────────
 export type PantryKind = 'ingredient' | 'cube' | 'prepared';
 export const KIND_LABELS: Record<PantryKind, string> = {
-  ingredient: '원재료', cube: '냉동 큐브', prepared: '냉장 이유식',
+  ingredient: '원재료', cube: '냉동 큐브', prepared: '보관 이유식',
 };
 export type Storage = 'room' | 'fridge' | 'freezer';
 export const STORAGE_LABELS: Record<Storage, string> = {

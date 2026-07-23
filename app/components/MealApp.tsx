@@ -199,7 +199,7 @@ export default function MealApp() {
             <div className="sheet" onClick={e => e.stopPropagation()}>
               <h3>무엇을 기록할까요?</h3>
               <button className="choice-row" onClick={() => { setMealEdit(null); setSheet('meal'); }}><span>🍽️</span><div><b>끼니 기록</b><i>먹은 양(g)·시간·반응</i></div></button>
-              <button className="choice-row" onClick={() => setSheet('batch')}><span>🥣</span><div><b>이유식 배치 만들기</b><i>구성(재료·g)과 총량 등록 → 냉장 재고</i></div></button>
+              <button className="choice-row" onClick={() => setSheet('batch')}><span>🥣</span><div><b>이유식 배치 만들기</b><i>구성(재료·g)과 총량 등록 → 보관 이유식 재고</i></div></button>
             </div>
           </div>
         )}
@@ -948,14 +948,16 @@ function GroupBars({ grams }: { grams: Record<FoodGroup, number> }) {
 
 function BatchSheet({ onClose, setApp, showToast }: { onClose: () => void; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void }) {
   const [name, setName] = useState('');
+  const [storage, setStorage] = useState<Storage>('fridge');
   const [rows, setRows] = useState<CompItem[]>([{ name: '쌀가루', amountG: 0, group: '곡류' }, { name: '물', amountG: 0, group: null }]);
   const total = rows.reduce((s, r) => s + (r.amountG || 0), 0);
   function save() {
     const comp = rows.filter(r => r.name.trim() && r.amountG > 0).map(r => ({ name: r.name.trim(), amountG: r.amountG, group: compGroup(r.name) }));
     if (comp.length === 0) { showToast('구성을 입력해 주세요'); return; }
     const title = name.trim() || (comp.filter(c => c.group).map(c => c.name).slice(0, 3).join(' ') + ' 이유식');
-    const d = new Date(); d.setDate(d.getDate() + 1);
-    const item: PantryItem = { id: uid(), kind: 'prepared', name: title, category: null, storage: 'fridge', quantity: null, unit: null, cubeCount: null, cubeVolumeMl: null, cubeUnit: 'ml', recipeRef: null, purchaseDate: null, openDate: null, cookedDate: todayStr(), expiryDate: d.toISOString().slice(0, 10), forBabyId: null, note: '', composition: comp, totalG: total, remainingG: total };
+    // 냉장 보관 1일, 냉동 보관 14일 기본 소진기한
+    const d = new Date(); d.setDate(d.getDate() + (storage === 'freezer' ? 14 : 1));
+    const item: PantryItem = { id: uid(), kind: 'prepared', name: title, category: null, storage, quantity: null, unit: null, cubeCount: null, cubeVolumeMl: null, cubeUnit: 'ml', recipeRef: null, purchaseDate: null, openDate: null, cookedDate: todayStr(), expiryDate: d.toISOString().slice(0, 10), forBabyId: null, note: '', composition: comp, totalG: total, remainingG: total };
     setApp(s => ({ ...s, pantry: [item, ...s.pantry] }));
     fetch('/api/pantry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) }).catch(console.error);
     showToast('이유식 배치를 만들었어요'); onClose();
@@ -965,9 +967,14 @@ function BatchSheet({ onClose, setApp, showToast }: { onClose: () => void; setAp
       <div className="sheet" onClick={e => e.stopPropagation()}>
         <h3>이유식 배치 만들기</h3>
         <div className="field"><label>이름 (선택)</label><input value={name} onChange={e => setName(e.target.value)} placeholder="예: 소고기 애호박죽" /></div>
+        <div className="field"><label>보관 방법</label>
+          <div className="chips-row">
+            {(['fridge', 'freezer'] as Storage[]).map(s => <button key={s} className={`chip-pick${storage === s ? ' on' : ''}`} onClick={() => setStorage(s)}>{STORAGE_LABELS[s]}{s === 'freezer' ? ' (14일)' : ' (1일)'}</button>)}
+          </div>
+        </div>
         <div className="field"><label>구성 (재료 · g)</label><CompositionBuilder rows={rows} setRows={setRows} /></div>
-        <p className="disclaimer" style={{ textAlign: 'left', padding: 0 }}>물은 총량에 포함되지만 식품군·영양 비율에선 제외돼요. 냉장 이유식 재고로 등록됩니다.</p>
-        <button className="btn-orange btn-full" onClick={save}>배치 만들기 ({total}g)</button>
+        <p className="disclaimer" style={{ textAlign: 'left', padding: 0 }}>물은 총량에 포함되지만 식품군·영양 비율에선 제외돼요. 보관 이유식 재고로 등록됩니다.</p>
+        <button className="btn-orange btn-full" onClick={save}>배치 만들기 ({total}g · {STORAGE_LABELS[storage]})</button>
       </div>
     </div>
   );

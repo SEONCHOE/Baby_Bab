@@ -441,8 +441,8 @@ function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boo
               <div key={kind} style={{ marginBottom: 18 }}>
                 <div className="fridge-group-head">{KIND_EMOJI[kind]} {KIND_LABELS[kind]} <span>{arr.length}</span></div>
                 {kind === 'ingredient' ? (
-                  [...CAT_ORDER, '기타'].map(cat => {
-                    const ci = arr.filter(p => (p.category || '기타') === cat);
+                  [...FOOD_GROUPS, '기타'].map(cat => {
+                    const ci = arr.filter(p => (ingredientGroup(p.name, p.category) || '기타') === cat);
                     if (ci.length === 0) return null;
                     return <div key={cat} className="fridge-box">
                       <div className="fridge-cat-label">{cat}</div>

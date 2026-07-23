@@ -5,7 +5,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import ingredientsRef from '@/data/ingredients_ref.json';
 import recipesData from '@/data/recipes.json';
 import {
-  Stage, STAGE_LABELS, STAGE_ICONS, STAGE_MONTHS, STAGE_ORDER, stageByMonths, stageProgress,
+  Stage, STAGE_LABELS, STAGE_ICONS, STAGE_MONTHS, STAGE_ORDER, stageByMonths,
   PantryKind, KIND_LABELS, Storage, STORAGE_LABELS, IntakeRatio, INTAKE_LABELS,
   getAgeMonths, todayStr, expiryStatus, ddayLabel, daysUntil, uid, ingredientEmoji, monthsBetween,
   CompItem, FoodGroup, FOOD_GROUPS, GROUP_COLORS, groupBreakdown, ingredientGroup,
@@ -273,7 +273,7 @@ function HomeScreen({ active, baby, months, stage, app, go }: { active: boolean;
           </div>
           <div className="hero-progress">
             <div className="hero-progress__head"><span>{STAGE_LABELS[stage]} · {STAGE_MONTHS[stage]}</span><span className="muted">월령 기준 권장</span></div>
-            <div className="stage-track"><span style={{ width: `${months != null ? stageProgress(months) : 0}%` }} /></div>
+            <div className="stage-track"><span style={{ width: `${months != null ? ((STAGE_ORDER.indexOf(stage) + 1) / STAGE_ORDER.length) * 100 : 0}%` }} /></div>
             <div className="stage-marks">{STAGE_ORDER.map(s => <span key={s} className={s === stage ? 'on' : ''}>{STAGE_LABELS[s]}</span>)}</div>
           </div>
         </div>

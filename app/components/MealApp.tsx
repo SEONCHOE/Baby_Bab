@@ -329,6 +329,33 @@ function HomeScreen({ active, baby, months, stage, app, go }: { active: boolean;
 }
 
 // ── FRIDGE ──────────────────────────────────────────────────
+const KIND_EMOJI: Record<PantryKind, string> = { ingredient: '🥕', cube: '🧊', prepared: '🥣' };
+
+function StockCard({ p, onRemove }: { p: PantryItem; onRemove: (id: string) => void }) {
+  const comp = (p.composition || []) as CompItem[];
+  const dateStr = p.cookedDate || p.purchaseDate;
+  const dateLabel = p.kind === 'cube' ? '소분' : p.kind === 'prepared' ? '조리' : '구매';
+  return (
+    <div className="stock-card">
+      <div className={`stock-emoji ${stockBg(p)}`}>{p.kind === 'ingredient' ? ingredientEmoji(p.name) : KIND_EMOJI[p.kind]}</div>
+      <div className="stock-body">
+        <div className="t">{p.name}{p.forBabyId ? <span className="for-baby">전용</span> : null}</div>
+        <div className="d">
+          {p.kind === 'cube' && p.cubeCount ? `${p.cubeCount}개${p.cubeVolumeMl ? ` × ${p.cubeVolumeMl}${p.cubeUnit || 'ml'}` : ''}`
+            : p.kind === 'prepared' ? `남은 ${p.remainingG ?? p.totalG ?? 0}${p.totalG ? `/${p.totalG}` : ''}g`
+              : (p.quantity ? `${p.quantity}${p.unit || ''}` : KIND_LABELS[p.kind])}
+          {dateStr ? ` · ${dateStr.slice(5)} ${dateLabel}` : ''} · {STORAGE_LABELS[p.storage]}
+        </div>
+        {p.kind === 'prepared' && comp.length > 0 && <div className="comp-summary" style={{ margin: '4px 0 0' }}>{comp.map(c => `${c.name} ${c.amountG}g`).join(' · ')}</div>}
+      </div>
+      <Dday date={p.expiryDate} />
+      <button className="stock-del" aria-label="삭제" onClick={() => onRemove(p.id)}>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 5v6m4-6v6" /></svg>
+      </button>
+    </div>
+  );
+}
+
 function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boolean; app: AppState; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void; openAdd: () => void }) {
   const [filter, setFilter] = useState<'all' | PantryKind>('all');
   const [listening, setListening] = useState(false);
@@ -391,24 +418,37 @@ function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boo
           <button key={f} className={filter === f ? 'is-active' : ''} onClick={() => setFilter(f)}>{f === 'all' ? '전체' : KIND_LABELS[f]}</button>
         ))}
       </div>
-      <div className="fridge-list">
-        {items.length === 0 ? <div className="empty-note">재고가 비어 있어요. + 로 추가해 주세요.</div> : items.map(p => (
-          <div key={p.id} className="stock-card">
-            <div className={`stock-emoji ${stockBg(p)}`}>{ingredientEmoji(p.name)}</div>
-            <div className="stock-body">
-              <div className="t">{p.name}{p.forBabyId ? <span className="for-baby">전용</span> : null}</div>
-              <div className="d">
-                {p.kind === 'cube' && p.cubeCount ? `${p.cubeCount}개${p.cubeVolumeMl ? ` × ${p.cubeVolumeMl}${p.cubeUnit || 'ml'}` : ''}` : (p.quantity ? `${p.quantity}${p.unit || ''}` : KIND_LABELS[p.kind])}
-                {p.purchaseDate ? ` · ${p.purchaseDate.slice(5)} ${p.kind === 'cube' ? '소분' : '구매'}` : ''} · {STORAGE_LABELS[p.storage]}
+      {app.pantry.length === 0 ? (
+        <div className="empty-note">재고가 비어 있어요. + 로 추가해 주세요.</div>
+      ) : filter === 'all' ? (
+        <div style={{ padding: '0 18px' }}>
+          {(['ingredient', 'cube', 'prepared'] as PantryKind[]).map(kind => {
+            const arr = app.pantry.filter(p => p.kind === kind);
+            if (arr.length === 0) return null;
+            return (
+              <div key={kind} style={{ marginBottom: 18 }}>
+                <div className="fridge-group-head">{KIND_EMOJI[kind]} {KIND_LABELS[kind]} <span>{arr.length}</span></div>
+                {kind === 'ingredient' ? (
+                  [...CAT_ORDER, '기타'].map(cat => {
+                    const ci = arr.filter(p => (p.category || '기타') === cat);
+                    if (ci.length === 0) return null;
+                    return <div key={cat} style={{ marginBottom: 8 }}>
+                      <div className="fridge-cat-label">{cat}</div>
+                      <div className="fridge-list">{ci.map(p => <StockCard key={p.id} p={p} onRemove={remove} />)}</div>
+                    </div>;
+                  })
+                ) : (
+                  <div className="fridge-list">{arr.map(p => <StockCard key={p.id} p={p} onRemove={remove} />)}</div>
+                )}
               </div>
-            </div>
-            <Dday date={p.expiryDate} />
-            <button className="stock-del" aria-label="삭제" onClick={() => remove(p.id)}>
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 5v6m4-6v6" /></svg>
-            </button>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="fridge-list">
+          {items.length === 0 ? <div className="empty-note">해당 재고가 없어요.</div> : items.map(p => <StockCard key={p.id} p={p} onRemove={remove} />)}
+        </div>
+      )}
       <p className="disclaimer">보관기한 기본값은 식약처·대한소아과학회 자료 기준(검증중)이며 직접 수정할 수 있어요.</p>
     </section>
   );

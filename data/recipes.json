@@ -1,0 +1,63 @@
+{
+  "_meta": {
+    "verified": false,
+    "note": "초기 스타터 내장 레시피. 영양 추정치는 배포 전 검증 필요(기획서 §9)",
+    "textureByStage": { "early": "10배죽/곱게 간", "mid": "7~5배죽/으깬", "late": "진밥/잘게 다진", "finish": "유아식/한입 크기" }
+  },
+  "recipes": [
+    {
+      "id": "r-rice-early",
+      "title": "초기 쌀미음 (10배죽)",
+      "stage_tags": ["early"],
+      "texture": "곱게 간 미음",
+      "ingredients": [{ "name": "쌀", "amountG": 10 }],
+      "steps": ["불린 쌀을 곱게 갈아요", "물 100ml와 함께 약불로 저으며 끓여요", "체에 걸러 매끄럽게 만들어요"],
+      "nutrition": { "kcal": 36, "protein": 0.6, "ironMg": 0.1 }
+    },
+    {
+      "id": "r-potato-early",
+      "title": "감자 애호박 미음",
+      "stage_tags": ["early"],
+      "texture": "곱게 간",
+      "ingredients": [{ "name": "쌀", "amountG": 10 }, { "name": "감자", "amountG": 15 }, { "name": "애호박", "amountG": 10 }],
+      "steps": ["감자·애호박을 푹 익혀 곱게 으깨요", "쌀미음에 섞어 약불로 데워요"],
+      "nutrition": { "kcal": 55, "protein": 1.2, "ironMg": 0.3 }
+    },
+    {
+      "id": "r-beef-mid",
+      "title": "소고기 애호박 중기죽",
+      "stage_tags": ["mid"],
+      "texture": "으깬 5배죽",
+      "ingredients": [{ "name": "쌀", "amountG": 20 }, { "name": "소고기", "amountG": 15 }, { "name": "애호박", "amountG": 15 }],
+      "steps": ["소고기를 삶아 곱게 다져요", "애호박을 익혀 다져요", "쌀죽에 넣고 뭉근히 끓여요"],
+      "nutrition": { "kcal": 120, "protein": 6.5, "ironMg": 0.9 }
+    },
+    {
+      "id": "r-chicken-mid",
+      "title": "닭고기 당근 중기죽",
+      "stage_tags": ["mid"],
+      "texture": "으깬",
+      "ingredients": [{ "name": "쌀", "amountG": 20 }, { "name": "닭고기", "amountG": 15 }, { "name": "당근", "amountG": 15 }],
+      "steps": ["닭고기를 삶아 다져요", "당근을 익혀 다져요", "쌀죽에 넣고 끓여요"],
+      "nutrition": { "kcal": 110, "protein": 6.0, "ironMg": 0.6 }
+    },
+    {
+      "id": "r-tofu-late",
+      "title": "두부 시금치 후기 진밥",
+      "stage_tags": ["late"],
+      "texture": "진밥",
+      "ingredients": [{ "name": "쌀", "amountG": 30 }, { "name": "두부", "amountG": 25 }, { "name": "시금치", "amountG": 15 }],
+      "steps": ["시금치를 데쳐 잘게 다져요", "두부를 으깨요", "진밥에 섞어 데워요"],
+      "nutrition": { "kcal": 140, "protein": 6.8, "ironMg": 1.3 }
+    },
+    {
+      "id": "r-fish-late",
+      "title": "흰살생선 브로콜리 후기 진밥",
+      "stage_tags": ["late"],
+      "texture": "잘게 다진",
+      "ingredients": [{ "name": "쌀", "amountG": 30 }, { "name": "흰살생선", "amountG": 20 }, { "name": "브로콜리", "amountG": 15 }],
+      "steps": ["생선을 쪄서 가시를 제거하고 다져요", "브로콜리를 익혀 다져요", "진밥에 섞어요"],
+      "nutrition": { "kcal": 135, "protein": 7.2, "ironMg": 0.7 }
+    }
+  ]
+}

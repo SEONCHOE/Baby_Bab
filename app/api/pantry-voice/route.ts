@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 - 수량: "한개/1개" → quantity=1, unit="개". "30g씩 6개" → cubeCount=6, cubeVolume=30, cubeUnit="g". "30ml씩" → cubeUnit="ml".
 - 발화에 재료 이름이 없고 "소분해서 …"처럼 직전에 말한 재료를 가리키면, name 값으로 정확히 "${lastItem || ''}" 문자열을 넣어라. ("직전 재료" 같은 표현을 그대로 넣지 마라.)
 - 가능하면 재료명을 아래 사전 표기로 정규화: ${(candidates || []).join(', ')}
-- 날짜 기본값 오늘(${today}).`;
+- purchaseDate(구매일/소분일/조리일): "7월 2일"→"${today.slice(0, 4)}-07-02", "어제"→어제, "3일 전"→3일 전 날짜 처럼 "YYYY-MM-DD"로. 날짜 언급이 없으면 null(오늘로 처리). 오늘은 ${today}.`;
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -36,8 +36,9 @@ export async function POST(req: NextRequest) {
                   type: 'array',
                   items: {
                     type: 'object', additionalProperties: false,
-                    required: ['kind', 'name', 'storage', 'quantity', 'unit', 'cubeCount', 'cubeVolume', 'cubeUnit'],
+                    required: ['kind', 'name', 'storage', 'quantity', 'unit', 'cubeCount', 'cubeVolume', 'cubeUnit', 'purchaseDate'],
                     properties: {
+                      purchaseDate: { type: ['string', 'null'] },
                       kind: { type: 'string', enum: ['ingredient', 'cube', 'prepared'] },
                       name: { type: 'string' },
                       storage: { type: 'string', enum: ['room', 'fridge', 'freezer'] },

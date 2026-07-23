@@ -55,21 +55,21 @@ interface SpeechRecognitionLike {
   onresult: ((e: SpeechEventLike) => void) | null; onerror: ((e: Event) => void) | null; onend: (() => void) | null;
   start(): void; stop(): void;
 }
-interface VoicePantry { kind?: PantryKind; name: string; storage?: Storage; quantity?: number | null; unit?: string | null; cubeCount?: number | null; cubeVolume?: number | null; cubeUnit?: string | null; }
+interface VoicePantry { kind?: PantryKind; name: string; storage?: Storage; quantity?: number | null; unit?: string | null; cubeCount?: number | null; cubeVolume?: number | null; cubeUnit?: string | null; purchaseDate?: string | null; }
 
 function pantryFromVoice(p: VoicePantry): PantryItem {
   const ref = REF.find(r => r.name === p.name);
   const storage: Storage = p.storage || 'fridge';
+  const purchaseDate = (p.purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(p.purchaseDate)) ? p.purchaseDate : todayStr();
   let expiryDate: string | null = null;
   const days = ref?.default_expiry_days?.[storage];
-  if (days != null) { const d = new Date(); d.setDate(d.getDate() + days); expiryDate = d.toISOString().slice(0, 10); }
-  const today = todayStr();
+  if (days != null) { const d = new Date(purchaseDate); d.setDate(d.getDate() + days); expiryDate = d.toISOString().slice(0, 10); }
   const kind = p.kind || 'ingredient';
   return {
     id: uid(), kind, name: p.name, category: ref?.category || null, storage,
     quantity: p.quantity ?? null, unit: p.unit || null,
     cubeCount: p.cubeCount ?? null, cubeVolumeMl: p.cubeVolume ?? null, cubeUnit: p.cubeUnit || 'ml',
-    recipeRef: null, purchaseDate: today, openDate: null, cookedDate: kind !== 'ingredient' ? today : null,
+    recipeRef: null, purchaseDate, openDate: null, cookedDate: kind !== 'ingredient' ? purchaseDate : null,
     expiryDate, forBabyId: null, note: '',
   };
 }

@@ -356,6 +356,18 @@ function StockCard({ p, onRemove }: { p: PantryItem; onRemove: (id: string) => v
   );
 }
 
+function StockChip({ p }: { p: PantryItem }) {
+  const s = expiryStatus(p.expiryDate);
+  const date = p.cookedDate || p.purchaseDate;
+  return (
+    <span className={`stock-chip st-${s}`} title={ddayLabel(p.expiryDate)}>
+      <span className="sc-emoji">{p.kind === 'ingredient' ? ingredientEmoji(p.name) : KIND_EMOJI[p.kind]}</span>
+      <span className="sc-name">{p.name}{p.kind === 'cube' && p.cubeCount ? ` ${p.cubeCount}개` : ''}</span>
+      {date && <i>{date.slice(5).replace('-', '/')}</i>}
+    </span>
+  );
+}
+
 function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boolean; app: AppState; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void; openAdd: () => void }) {
   const [filter, setFilter] = useState<'all' | PantryKind>('all');
   const [listening, setListening] = useState(false);
@@ -434,11 +446,11 @@ function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boo
                     if (ci.length === 0) return null;
                     return <div key={cat} style={{ marginBottom: 8 }}>
                       <div className="fridge-cat-label">{cat}</div>
-                      <div className="fridge-list">{ci.map(p => <StockCard key={p.id} p={p} onRemove={remove} />)}</div>
+                      <div className="chip-wrap">{ci.map(p => <StockChip key={p.id} p={p} />)}</div>
                     </div>;
                   })
                 ) : (
-                  <div className="fridge-list">{arr.map(p => <StockCard key={p.id} p={p} onRemove={remove} />)}</div>
+                  <div className="chip-wrap">{arr.map(p => <StockChip key={p.id} p={p} />)}</div>
                 )}
               </div>
             );
@@ -449,7 +461,7 @@ function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boo
           {items.length === 0 ? <div className="empty-note">해당 재고가 없어요.</div> : items.map(p => <StockCard key={p.id} p={p} onRemove={remove} />)}
         </div>
       )}
-      <p className="disclaimer">보관기한 기본값은 식약처·대한소아과학회 자료 기준(검증중)이며 직접 수정할 수 있어요.</p>
+      <p className="disclaimer">{filter === 'all' ? '한눈에 보기 화면이에요. 삭제·상세는 원재료·냉동 큐브·보관 이유식 탭에서.' : '보관기한 기본값은 식약처·대한소아과학회 자료 기준(검증중)이며 직접 수정할 수 있어요.'}</p>
     </section>
   );
 }

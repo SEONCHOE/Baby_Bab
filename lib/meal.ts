@@ -107,11 +107,22 @@ export const GROUP_COLORS: Record<FoodGroup, string> = {
 const CATEGORY_TO_GROUP: Record<string, FoodGroup> = {
   곡류: '곡류', 채소: '채소', 과일: '과일', 육류: '단백질', 어류: '단백질', 난류: '단백질', 콩류: '단백질', 유제품: '유제품',
 };
+// 재료명 키워드 → 식품군 (사전에 없는 이름도 분류되도록). 순서대로 첫 매칭.
+// 순서 주의: 채소를 과일보다 먼저 검사(양배추·감자 등이 과일 "배"·"감"에 오분류되지 않도록)
+const GROUP_KEYWORDS: [FoodGroup, RegExp][] = [
+  ['곡류', /쌀|찹쌀|현미|백미|잡곡|보리|오트|귀리|퀴노아|수수|밥|죽|미음|국수|빵|시리얼|전분|밀가루/],
+  ['단백질', /소고기|쇠고기|한우|닭|계육|돼지|고기|안심|사태|달걀|계란|노른자|흰자|메추리|생선|대구|가자미|연어|광어|흰살|명태|두부|순두부|콩|완두|병아리콩|렌틸|새우|멸치|들깨|검은깨/],
+  ['유제품', /우유|치즈|요거트|요구르트|분유|모유|버터|생크림|플레인/],
+  ['채소', /애호박|호박|양배추|배추|브로콜리|콜리플라워|당근|시금치|청경채|양파|대파|무|비트|오이|파프리카|피망|버섯|표고|느타리|아욱|근대|비타민|케일|감자|고구마|단호박|가지|콩나물|숙주|연근|우엉|아스파라거스|셀러리|부추|나물/],
+  ['과일', /사과|배|바나나|블루베리|딸기|아보카도|망고|복숭아|자두|귤|오렌지|참외|수박|포도|키위|토마토|곶감|단감|홍시/],
+];
 
 /** 재료명 → 식품군 (물·기타·미분류는 null = 비율에서 제외) */
 export function ingredientGroup(name: string, category?: string | null): FoodGroup | null {
-  if (/물|육수|다시/.test(name)) return null;
+  if (!name) return null;
+  if (/물|육수|다시|간|소금|참기름|들기름|올리브|식용유|설탕|꿀/.test(name)) return null;
   if (category && CATEGORY_TO_GROUP[category]) return CATEGORY_TO_GROUP[category];
+  for (const [g, re] of GROUP_KEYWORDS) if (re.test(name)) return g;
   return null;
 }
 

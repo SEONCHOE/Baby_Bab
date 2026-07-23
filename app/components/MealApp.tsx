@@ -291,7 +291,7 @@ function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boo
       </div>
       <div className="fridge-list">
         {items.length === 0 ? <div className="empty-note">재고가 비어 있어요. + 로 추가해 주세요.</div> : items.map(p => (
-          <div key={p.id} className="stock-card" onClick={() => remove(p.id)}>
+          <div key={p.id} className="stock-card">
             <div className={`stock-emoji ${stockBg(p)}`}>{ingredientEmoji(p.name)}</div>
             <div className="stock-body">
               <div className="t">{p.name}{p.forBabyId ? <span className="for-baby">전용</span> : null}</div>
@@ -301,10 +301,13 @@ function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boo
               </div>
             </div>
             <Dday date={p.expiryDate} />
+            <button className="stock-del" aria-label="삭제" onClick={() => remove(p.id)}>
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 5v6m4-6v6" /></svg>
+            </button>
           </div>
         ))}
       </div>
-      <p className="disclaimer">보관기한 기본값은 식약처·대한소아과학회 자료 기준(검증중)이며 직접 수정할 수 있어요. 항목을 탭하면 삭제됩니다.</p>
+      <p className="disclaimer">보관기한 기본값은 식약처·대한소아과학회 자료 기준(검증중)이며 직접 수정할 수 있어요.</p>
     </section>
   );
 }

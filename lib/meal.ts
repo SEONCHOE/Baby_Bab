@@ -1,4 +1,5 @@
 // 아기의 밥상 — 이유식 도메인 공용 상수/유틸 (클라이언트·서버 공용, 순수 함수만)
+import ingredientsRef from '@/data/ingredients_ref.json';
 
 // ── 이유식 단계 ──────────────────────────────────────────────
 export type Stage = 'early' | 'mid' | 'late' | 'finish';
@@ -137,6 +138,45 @@ export function groupBreakdown(comp: CompItem[], eatenG: number | null, totalG: 
     if (g) out[g] += (it.amountG || 0) * frac;
   }
   return out;
+}
+
+// ── 영양 계산 (식품안전나라 식품영양성분DB 기반) ─────────────
+interface NutriPer100 { kcal?: number; protein?: number; fat?: number; carb?: number; sodiumMg?: number; ironMg?: number; calciumMg?: number }
+interface RefRow { name: string; category: string; nutrition_per_100g?: NutriPer100 }
+const REF_ROWS: RefRow[] = (ingredientsRef as { ingredients: RefRow[] }).ingredients;
+const NUTRI_MAP = new Map<string, NutriPer100>(REF_ROWS.map(r => [r.name, r.nutrition_per_100g || {}]));
+
+export interface Nutrition { kcal: number; protein: number; ironMg: number; sodiumMg: number; calciumMg: number }
+const ZERO_NUTRI: Nutrition = { kcal: 0, protein: 0, ironMg: 0, sodiumMg: 0, calciumMg: 0 };
+
+/** 재료명 → per-100g 영양 (정확 일치 → 부분 일치). 물·미확인은 null */
+export function ingredientNutrition(name: string): Nutrition | null {
+  if (!name || /물|육수|다시/.test(name)) return null;
+  let n = NUTRI_MAP.get(name.trim());
+  if (!n) { const hit = REF_ROWS.find(r => name.includes(r.name) || r.name.includes(name.trim())); n = hit?.nutrition_per_100g; }
+  if (!n) return null;
+  return { kcal: n.kcal ?? 0, protein: n.protein ?? 0, ironMg: n.ironMg ?? 0, sodiumMg: n.sodiumMg ?? 0, calciumMg: n.calciumMg ?? 0 };
+}
+
+/** 배치 구성 + 먹은g/총g → 섭취 영양 합산 */
+export function sumNutrition(comp: CompItem[], eatenG: number | null, totalG: number | null): Nutrition {
+  const out = { ...ZERO_NUTRI };
+  const frac = eatenG != null && totalG ? eatenG / totalG : 1;
+  for (const it of comp) {
+    const n = ingredientNutrition(it.name);
+    if (!n) continue;
+    const g = (it.amountG || 0) * frac;
+    out.kcal += (n.kcal * g) / 100;
+    out.protein += (n.protein * g) / 100;
+    out.ironMg += (n.ironMg * g) / 100;
+    out.sodiumMg += (n.sodiumMg * g) / 100;
+    out.calciumMg += (n.calciumMg * g) / 100;
+  }
+  return out;
+}
+
+export function addNutrition(a: Nutrition, b: Nutrition): Nutrition {
+  return { kcal: a.kcal + b.kcal, protein: a.protein + b.protein, ironMg: a.ironMg + b.ironMg, sodiumMg: a.sodiumMg + b.sodiumMg, calciumMg: a.calciumMg + b.calciumMg };
 }
 
 /** 두 날짜 사이 개월수(소수) — 측정일 기준 아기 월령 계산용 */

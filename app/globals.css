@@ -350,6 +350,9 @@ a:hover{color:var(--orange-400)}
 .chip-pick.on{background:var(--orange-400);border-color:var(--orange-400);color:#fff}
 .intake-calc{margin-top:8px;background:var(--green-50);border:1px solid var(--green-200);color:var(--green-500);font-size:13px;font-weight:600;padding:9px 12px;border-radius:var(--r-md)}
 .intake-calc b{font-size:16px;color:var(--green-500)}
+.nutri-line{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.nutri-line span{font-size:11px;font-weight:600;color:var(--ink-2);background:var(--surface-3);padding:3px 8px;border-radius:var(--r-pill)}
+.nutri-line span.na-high{background:var(--pink-50);color:var(--pink-400)}
 .toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%) translateY(12px);background:rgba(45,36,27,.92);color:#fff;font-size:13px;font-weight:600;padding:11px 18px;border-radius:var(--r-pill);z-index:90;opacity:0;pointer-events:none;transition:all .25s;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .empty-note{text-align:center;color:var(--ink-4);font-size:13px;padding:26px 18px}

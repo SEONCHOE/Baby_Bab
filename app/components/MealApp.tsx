@@ -9,6 +9,7 @@ import {
   PantryKind, KIND_LABELS, Storage, STORAGE_LABELS, IntakeRatio, INTAKE_LABELS,
   getAgeMonths, todayStr, expiryStatus, ddayLabel, daysUntil, uid, ingredientEmoji, monthsBetween,
   CompItem, FoodGroup, FOOD_GROUPS, GROUP_COLORS, groupBreakdown, ingredientGroup,
+  Nutrition, sumNutrition, addNutrition,
 } from '@/lib/meal';
 import { percentileFor, rankLabel, nutritionComment, PctResult, GROWTH_DATA, Metric } from '@/lib/growth';
 
@@ -631,6 +632,7 @@ function LogScreen({ active, app, babyId, setApp, showToast, openAdd, openMeal }
   const introduced = Array.from(new Set(app.mealLogs.filter(m => m.newIngredientName).map(m => m.newIngredientName)));
   const mealsWithComp = app.mealLogs.filter(m => (m.composition || []).length > 0);
   const totalGrams = mealsWithComp.reduce((acc, m) => { const gb = mealGroups(m); FOOD_GROUPS.forEach(g => acc[g] += gb[g]); return acc; }, { 곡류: 0, 채소: 0, 과일: 0, 단백질: 0, 유제품: 0 } as Record<FoodGroup, number>);
+  const totalNutri = mealsWithComp.reduce((acc, m) => addNutrition(acc, sumNutrition(m.composition || [], mealEatenG(m) ?? (m.batchTotalG ?? null), m.batchTotalG ?? null)), { kcal: 0, protein: 0, ironMg: 0, sodiumMg: 0, calciumMg: 0 } as Nutrition);
 
   return (
     <section className={`screen${active ? ' is-active' : ''}`}>
@@ -674,7 +676,7 @@ function LogScreen({ active, app, babyId, setApp, showToast, openAdd, openMeal }
           <div className="section">
             <div className="section-head"><h3 className="h3">식품군 비율 (누적)</h3></div>
             {FOOD_GROUPS.some(g => totalGrams[g] > 0)
-              ? <div className="growth-card"><GroupBars grams={totalGrams} /></div>
+              ? <div className="growth-card"><GroupBars grams={totalGrams} />{totalNutri.kcal > 0 && <><div style={{ height: 10 }} /><NutriLine n={totalNutri} /></>}</div>
               : <div className="empty-note">구성이 있는 끼니를 기록하면 곡류·채소·과일·단백질 비율을 보여드려요.</div>}
           </div>
           <div className="section">
@@ -684,6 +686,7 @@ function LogScreen({ active, app, babyId, setApp, showToast, openAdd, openMeal }
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><b>{m.menuName}</b><span className="muted" style={{ fontSize: 12 }}>{m.date} · {mealEatenG(m) != null ? `${mealEatenG(m)}${m.batchTotalG ? `/${m.batchTotalG}` : ''}g` : ''}</span></div>
                 <div className="comp-summary">{(m.composition || []).map(c => `${c.name} ${c.amountG}g`).join(' · ')}</div>
                 <GroupBars grams={mealGroups(m)} />
+                <NutriLine n={sumNutrition(m.composition || [], mealEatenG(m) ?? (m.batchTotalG ?? null), m.batchTotalG ?? null)} />
               </div>
             ))}
           </div>
@@ -717,6 +720,13 @@ function BabyScreen({ active, baby, babies, months, stage, growth, mealLogs, set
   const grpTotals = mealLogs.filter(m => (m.composition || []).length > 0).reduce((acc, m) => { const gb = mealGroups(m); FOOD_GROUPS.forEach(g => acc[g] += gb[g]); return acc; }, { 곡류: 0, 채소: 0, 과일: 0, 단백질: 0, 유제품: 0 } as Record<FoodGroup, number>);
   const hasGrp = FOOD_GROUPS.some(g => grpTotals[g] > 0);
   const proteinLow = hasGrp && (grpTotals['단백질'] / FOOD_GROUPS.reduce((s, g) => s + grpTotals[g], 0)) < 0.12;
+  // 최근 7일 이유식 영양 합계 → 일평균
+  const wk = todayStr(); const wkAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
+  const recentMeals = mealLogs.filter(m => (m.composition || []).length > 0 && m.date && m.date >= wkAgo && m.date <= wk);
+  const days = Math.max(1, new Set(recentMeals.map(m => m.date)).size);
+  const wkNutri = recentMeals.reduce((a, m) => addNutrition(a, sumNutrition(m.composition || [], mealEatenG(m) ?? (m.batchTotalG ?? null), m.batchTotalG ?? null)), { kcal: 0, protein: 0, ironMg: 0, sodiumMg: 0, calciumMg: 0 } as Nutrition);
+  const naPerDay = wkNutri.sodiumMg / days;
+  const naHigh = naPerDay > 370; // 영아 나트륨 충분섭취량 참고(검증중)
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [growthSheet, setGrowthSheet] = useState(false);
   const done = Object.values(checks).filter(Boolean).length;
@@ -767,7 +777,14 @@ function BabyScreen({ active, baby, babies, months, stage, growth, mealLogs, set
             <>
               <div className="ratio-lbl" style={{ marginBottom: 8 }}>이유식 식품군 구성 (누적 섭취량 기준)</div>
               <GroupBars grams={grpTotals} />
+              {wkNutri.kcal > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div className="ratio-lbl" style={{ marginBottom: 6 }}>최근 7일 이유식 영양 (일평균)</div>
+                  <NutriLine n={{ kcal: wkNutri.kcal / days, protein: wkNutri.protein / days, ironMg: wkNutri.ironMg / days, sodiumMg: naPerDay, calciumMg: wkNutri.calciumMg / days }} />
+                </div>
+              )}
               <div className="assess-llm" style={{ paddingBottom: 4 }}>
+                {naHigh && <div className="llm-line warn"><span>🔴</span><div><b>나트륨 주의</b> — 이유식 나트륨(일평균 {Math.round(naPerDay)}mg)이 높은 편이에요. 아기는 간을 하지 않고, 시판 제품·치즈·간장 사용을 줄여요.</div></div>}
                 {proteinLow
                   ? <div className="llm-line watch"><span>🟡</span><div><b>살펴볼 점</b> — 단백질(고기·생선·달걀·콩) 비중이 낮아요. 철분 보충을 위해 소고기·달걀노른자를 조금씩 늘려봐요.</div></div>
                   : <div className="llm-line ok"><span>🟢</span><div><b>잘 되고 있는 점</b> — 곡류·채소·단백질이 고르게 들어가고 있어요.</div></div>}
@@ -998,6 +1015,18 @@ function GroupBars({ grams }: { grams: Record<FoodGroup, number> }) {
   );
 }
 
+function NutriLine({ n }: { n: Nutrition }) {
+  if (n.kcal <= 0) return null;
+  return (
+    <div className="nutri-line">
+      <span>🔥 {Math.round(n.kcal)}kcal</span>
+      <span>🥚 단백질 {n.protein.toFixed(1)}g</span>
+      <span>🩸 철분 {n.ironMg.toFixed(1)}mg</span>
+      <span className={n.sodiumMg > 200 ? 'na-high' : ''}>🧂 나트륨 {Math.round(n.sodiumMg)}mg</span>
+    </div>
+  );
+}
+
 function BatchSheet({ onClose, setApp, showToast }: { onClose: () => void; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void }) {
   const [name, setName] = useState('');
   const [storage, setStorage] = useState<Storage>('fridge');
@@ -1050,12 +1079,13 @@ function MealSheet({ babyId, app, editMeal, onClose, setApp, showToast }: { baby
   const total = batch ? (batch.totalG ?? 0) : comp.reduce((s, r) => s + (r.amountG || 0), 0);
   const eatenN = eaten === '' ? null : Number(eaten);
   const grams = groupBreakdown(comp, eatenN ?? total, total);
+  const nutri = sumNutrition(comp, eatenN ?? total, total);
 
   function save() {
     const compClean = comp.filter(r => r.name.trim() && r.amountG > 0).map(r => ({ name: r.name.trim(), amountG: r.amountG, group: compGroup(r.name) }));
     const name = batch ? batch.name : (menuName.trim() || compClean.filter(c => c.group).map(c => c.name).slice(0, 3).join(' ') || '이유식');
     if (isEdit) {
-      const patch = { menuName: name, date, time, estimatedIntakeG: eatenN, reaction: reaction.trim(), adverseFlag, isNewIngredient: !!newIng.trim(), newIngredientName: newIng.trim(), composition: compClean, batchTotalG: (compClean.reduce((s, r) => s + r.amountG, 0) || editMeal!.batchTotalG || null) };
+      const patch = { menuName: name, date, time, estimatedIntakeG: eatenN, estimatedKcal: nutri.kcal > 0 ? Math.round(nutri.kcal) : null, reaction: reaction.trim(), adverseFlag, isNewIngredient: !!newIng.trim(), newIngredientName: newIng.trim(), composition: compClean, batchTotalG: (compClean.reduce((s, r) => s + r.amountG, 0) || editMeal!.batchTotalG || null) };
       setApp(s => ({ ...s, mealLogs: s.mealLogs.map(x => (x.id === editMeal!.id ? { ...x, ...patch } : x)) }));
       fetch(`/api/meal-logs/${editMeal!.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }).catch(console.error);
       showToast('끼니를 수정했어요'); onClose(); return;
@@ -1063,7 +1093,7 @@ function MealSheet({ babyId, app, editMeal, onClose, setApp, showToast }: { baby
     if (!batch && compClean.length === 0 && !menuName.trim()) { showToast('배치를 선택하거나 구성을 입력해 주세요'); return; }
     const m: MealLog = {
       id: uid(), babyId, date, time, menuName: name, recipeRef: null, intakeRatio: null,
-      estimatedKcal: null, estimatedIntakeG: eatenN, reaction: reaction.trim(), adverseFlag, adverseNote: '',
+      estimatedKcal: nutri.kcal > 0 ? Math.round(nutri.kcal) : null, estimatedIntakeG: eatenN, reaction: reaction.trim(), adverseFlag, adverseNote: '',
       isNewIngredient: !!newIng.trim(), newIngredientName: newIng.trim(), beforeMl: null, afterMl: null,
       composition: compClean, batchTotalG: total || null, batchRef: batch?.id || null,
     };
@@ -1101,6 +1131,7 @@ function MealSheet({ babyId, app, editMeal, onClose, setApp, showToast }: { baby
         {(eatenN ?? total) > 0 && FOOD_GROUPS.some(g => grams[g] > 0) && (
           <div className="field"><label>이번 끼니 식품군</label><GroupBars grams={grams} /></div>
         )}
+        {nutri.kcal > 0 && <div className="field"><label>이번 끼니 영양 (추정)</label><NutriLine n={nutri} /></div>}
         <div className="field"><label>처음 먹인 재료 (선택)</label><input value={newIng} onChange={e => setNewIng(e.target.value)} placeholder="예: 소고기 (3일 관찰)" /></div>
         <div className="field"><label>반응 메모</label><textarea value={reaction} onChange={e => setReaction(e.target.value)} placeholder="잘 먹었어요 / 입에 안 맞아 했어요" /></div>
         <div className="field"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}><input type="checkbox" checked={adverseFlag} onChange={e => setAdverseFlag(e.target.checked)} style={{ width: 'auto' }} />이상반응(발진·구토·설사 등)이 있었어요</label></div>

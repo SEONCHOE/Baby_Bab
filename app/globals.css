@@ -279,6 +279,9 @@ a:hover{color:var(--orange-400)}
 .gm-pct{font-size:11.5px;color:var(--green-500);font-weight:600;margin-top:2px}
 .growth-chart{width:100%;height:80px;margin-top:6px;display:block}
 .growth-foot{font-size:11px;color:var(--ink-4);text-align:right;margin-top:4px}
+.pct-track{position:relative;height:8px;border-radius:99px;background:linear-gradient(90deg,var(--pink-200),var(--green-200) 50%,var(--orange-200))}
+.pct-marker{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid var(--ink);transform:translate(-50%,-50%)}
+.pct-scale{display:flex;justify-content:space-between;font-size:10px;color:var(--ink-4);font-weight:600;margin-top:5px}
 .dev-list{display:flex;flex-direction:column;gap:8px}
 .dev-check{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px 14px;display:flex;gap:12px;align-items:center;cursor:pointer}
 .checkbox{width:24px;height:24px;border-radius:50%;border:2px solid var(--line-2);background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}

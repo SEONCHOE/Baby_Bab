@@ -9,6 +9,7 @@ import {
   PantryKind, KIND_LABELS, Storage, STORAGE_LABELS, IntakeRatio, INTAKE_LABELS,
   getAgeMonths, todayStr, expiryStatus, ddayLabel, daysUntil, uid, ingredientEmoji,
 } from '@/lib/meal';
+import { percentileFor, rankLabel, nutritionComment, PctResult } from '@/lib/growth';
 
 type Route = 'home' | 'fridge' | 'recipe' | 'log' | 'baby';
 
@@ -142,7 +143,7 @@ export default function MealApp() {
             <FridgeScreen active={route === 'fridge'} app={app} setApp={setApp} showToast={showToast} openAdd={() => setSheet('pantry')} />
             <RecipeScreen active={route === 'recipe'} baby={baby} months={months} stage={stage} app={app} showToast={showToast} />
             <LogScreen active={route === 'log'} app={app} openAdd={() => setSheet('meal')} />
-            <BabyScreen active={route === 'baby'} baby={baby} babies={babies} months={months} stage={stage} growth={app.growth} setActiveBabyId={setActiveBabyId} />
+            <BabyScreen active={route === 'baby'} baby={baby} babies={babies} months={months} stage={stage} growth={app.growth} setApp={setApp} showToast={showToast} setActiveBabyId={setActiveBabyId} />
           </>
         )}
 
@@ -485,10 +486,10 @@ const DEV_ITEMS = [
   { id: 'sit', t: '지지하면 앉을 수 있어요', d: '중기 이유식 진입 신호' },
 ];
 
-function BabyScreen({ active, baby, babies, months, stage, growth, setActiveBabyId }: { active: boolean; baby: Baby | null; babies: Baby[]; months: number | null; stage: Stage; growth: Growth[]; setActiveBabyId: (id: number) => void }) {
+function BabyScreen({ active, baby, babies, months, stage, growth, setApp, showToast, setActiveBabyId }: { active: boolean; baby: Baby | null; babies: Baby[]; months: number | null; stage: Stage; growth: Growth[]; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void; setActiveBabyId: (id: number) => void }) {
   const [checks, setChecks] = useState<Record<string, boolean>>({});
+  const [growthSheet, setGrowthSheet] = useState(false);
   const done = Object.values(checks).filter(Boolean).length;
-  const latest = growth.length ? growth[growth.length - 1] : null;
 
   return (
     <section className={`screen${active ? ' is-active' : ''}`}>
@@ -511,7 +512,7 @@ function BabyScreen({ active, baby, babies, months, stage, growth, setActiveBaby
         </div>
       )}
 
-      <BabyGrowth latest={latest} />
+      <GrowthSection gender={baby?.gender || 'girl'} months={months} growth={growth} onAdd={() => setGrowthSheet(true)} />
 
       <div className="baby-section">
         <div className="section-head"><h3 className="h3">발달 체크 · 이유식 준비</h3></div>
@@ -536,25 +537,82 @@ function BabyScreen({ active, baby, babies, months, stage, growth, setActiveBaby
           <p className="assess-guard">추정치를 포함한 참고 정보예요. 정확한 판단은 소아과 상담을 권해요.</p>
         </div>
       </div>
+
+      {growthSheet && baby && <GrowthSheet babyId={baby.id} onClose={() => setGrowthSheet(false)} setApp={setApp} showToast={showToast} />}
     </section>
   );
 }
 
-function BabyGrowth({ latest }: { latest: Growth | null }) {
+function GrowthSection({ gender, months, growth, onAdd }: { gender: 'boy' | 'girl'; months: number | null; growth: Growth[]; onAdd: () => void }) {
+  const latest = growth.length ? growth[growth.length - 1] : null;
+  const mo = months;
+  const wPct = latest?.weight != null && mo != null ? percentileFor('weight', gender, mo, latest.weight) : null;
+  const hPct = latest?.height != null && mo != null ? percentileFor('height', gender, mo, latest.height) : null;
+  const comment = nutritionComment(wPct?.pct ?? null, hPct?.pct ?? null);
+  const toneCls = comment.tone === 'warn' ? 'tone-warn' : comment.tone === 'watch' ? 'tone-watch' : '';
+
   return (
     <div className="baby-section">
-      <div className="section-head"><h3 className="h3">성장 기록</h3></div>
-      <div className="growth-card">
-        <div className="growth-metrics">
-          <div><div className="gm-lbl">몸무게</div><div className="gm-val">{latest?.weight ?? '—'}<span>kg</span></div></div>
-          <div><div className="gm-lbl">키</div><div className="gm-val">{latest?.height ?? '—'}<span>cm</span></div></div>
+      <div className="section-head"><h3 className="h3">성장 기록</h3><span className="more" onClick={onAdd}>기록 추가 ›</span></div>
+      {!latest ? (
+        <div className="growth-card"><div className="empty-note" style={{ padding: '10px 0' }}>키·몸무게를 입력하면 정상 백분위 중 어디에 있는지 보여드려요.</div></div>
+      ) : (
+        <>
+          <div className="growth-card">
+            <MetricRow label="몸무게" unit="kg" value={latest.weight} pct={wPct} />
+            <div style={{ height: 12 }} />
+            <MetricRow label="키" unit="cm" value={latest.height} pct={hPct} />
+            <div className="growth-foot">WHO 성장도표 P3~P97 기준 · {latest.date} 측정{mo != null ? ` · ${mo}개월` : ''}</div>
+          </div>
+          <div className={`alert-card ${toneCls}`} style={{ marginTop: 8 }}>
+            <span className="alert-ico">{comment.tone === 'warn' ? '⚠️' : comment.tone === 'watch' ? '🟡' : '🟢'}</span>
+            <div className="alert-body"><div className="t">영양 코멘트</div><div className="d" style={{ marginTop: 3, lineHeight: 1.5 }}>{comment.text}</div></div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MetricRow({ label, unit, value, pct }: { label: string; unit: string; value: number | null; pct: PctResult | null }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <div className="gm-lbl">{label}</div>
+        {pct && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--orange-500)' }}>{Math.round(pct.pct)}백분위 · {rankLabel(pct.pct)}</div>}
+      </div>
+      <div className="gm-val" style={{ margin: '2px 0 6px' }}>{value ?? '—'}<span>{unit}</span></div>
+      {pct && (
+        <>
+          <div className="pct-track"><span className="pct-marker" style={{ left: `${pct.pos}%` }} /></div>
+          <div className="pct-scale"><span>P3 {pct.band.p3}</span><span>P50 {pct.band.p50}</span><span>P97 {pct.band.p97}</span></div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function GrowthSheet({ babyId, onClose, setApp, showToast }: { babyId: number; onClose: () => void; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void }) {
+  const [date, setDate] = useState(todayStr());
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
+  function save() {
+    if (!weight && !height) { showToast('키나 몸무게를 입력해 주세요'); return; }
+    const rec: Growth = { id: uid(), date, weight: weight ? Number(weight) : null, height: height ? Number(height) : null };
+    setApp(s => ({ ...s, growth: [...s.growth, rec].sort((a, b) => a.date.localeCompare(b.date)) }));
+    fetch('/api/growth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...rec, babyId }) }).catch(console.error);
+    showToast('성장 기록을 저장했어요'); onClose();
+  }
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="sheet" onClick={e => e.stopPropagation()}>
+        <h3>성장 기록 추가</h3>
+        <div className="field"><label>측정일</label><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div className="field" style={{ flex: 1 }}><label>몸무게 (kg)</label><input type="number" inputMode="decimal" value={weight} onChange={e => setWeight(e.target.value)} placeholder="6.8" /></div>
+          <div className="field" style={{ flex: 1 }}><label>키 (cm)</label><input type="number" inputMode="decimal" value={height} onChange={e => setHeight(e.target.value)} placeholder="63" /></div>
         </div>
-        <svg className="growth-chart" viewBox="0 0 260 96" preserveAspectRatio="none">
-          <path d="M0,80 C60,74 120,60 180,48 C210,42 240,38 260,34" fill="none" stroke="var(--green-400)" strokeWidth="3" strokeLinecap="round" />
-          <path d="M0,80 C60,74 120,60 180,48 C210,42 240,38 260,34 L260,96 L0,96 Z" fill="var(--green-100)" opacity="0.4" />
-          <circle cx="260" cy="34" r="4" fill="var(--green-500)" stroke="#fff" strokeWidth="2" />
-        </svg>
-        <div className="growth-foot">WHO·질병관리청 성장도표 (기록 연동)</div>
+        <button className="btn-orange btn-full" onClick={save}>저장하기</button>
       </div>
     </div>
   );

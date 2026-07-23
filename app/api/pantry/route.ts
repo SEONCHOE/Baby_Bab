@@ -10,12 +10,12 @@ export async function POST(req: NextRequest) {
     const p = await req.json();
     await pool.query(
       `INSERT INTO pantry_items
-        (id, user_id, kind, name, category, storage, quantity, unit, cube_count, cube_volume_ml,
+        (id, user_id, kind, name, category, storage, quantity, unit, cube_count, cube_volume_ml, cube_unit,
          recipe_ref, purchase_date, open_date, cooked_date, expiry_date, for_baby_id, note, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         p.id, userId, p.kind || 'ingredient', p.name, p.category || null, p.storage || 'fridge',
-        p.quantity ?? null, p.unit || null, p.cubeCount ?? null, p.cubeVolumeMl ?? null,
+        p.quantity ?? null, p.unit || null, p.cubeCount ?? null, p.cubeVolumeMl ?? null, p.cubeUnit || 'ml',
         p.recipeRef || null, p.purchaseDate || null, p.openDate || null, p.cookedDate || null,
         p.expiryDate || null, p.forBabyId ?? null, p.note || null, Date.now(),
       ]

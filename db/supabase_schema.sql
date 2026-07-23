@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS pantry_items (
   unit           varchar(20),
   cube_count     integer,
   cube_volume_ml integer,
+  cube_unit      varchar(4) DEFAULT 'ml',
   recipe_ref     varchar(36),
   purchase_date  date,
   open_date      date,

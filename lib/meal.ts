@@ -98,6 +98,16 @@ export function ingredientEmoji(name: string): string {
   return '🥣';
 }
 
+/** 두 날짜 사이 개월수(소수) — 측정일 기준 아기 월령 계산용 */
+export function monthsBetween(birthStr: string, dateStr: string): number {
+  const [by, bm, bd] = birthStr.split('-').map(Number);
+  const [dy, dm, dd] = dateStr.split('-').map(Number);
+  let months = (dy - by) * 12 + (dm - bm);
+  if (dd < bd) months -= 1;
+  const frac = (dd - bd) / 30;
+  return Math.max(0, months + (dd >= bd ? frac : 1 + frac));
+}
+
 /** 이유식 단계 진행률(현재 단계 안에서의 %, 0~100) */
 export function stageProgress(months: number): number {
   const ranges: Record<Stage, [number, number]> = { early: [4, 7], mid: [7, 10], late: [10, 13], finish: [13, 19] };

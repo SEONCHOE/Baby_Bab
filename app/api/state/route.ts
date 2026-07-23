@@ -51,7 +51,7 @@ function mapPantry(r: RowDataPacket) {
   return {
     id: r.id, kind: r.kind, name: r.name, category: r.category || null, storage: r.storage,
     quantity: r.quantity != null ? Number(r.quantity) : null, unit: r.unit || null,
-    cubeCount: r.cube_count ?? null, cubeVolumeMl: r.cube_volume_ml ?? null, recipeRef: r.recipe_ref || null,
+    cubeCount: r.cube_count ?? null, cubeVolumeMl: r.cube_volume_ml ?? null, cubeUnit: r.cube_unit || 'ml', recipeRef: r.recipe_ref || null,
     purchaseDate: d(r.purchase_date), openDate: d(r.open_date), cookedDate: d(r.cooked_date), expiryDate: d(r.expiry_date),
     forBabyId: r.for_baby_id ?? null, note: r.note || '',
   };

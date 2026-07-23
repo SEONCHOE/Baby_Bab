@@ -7,16 +7,16 @@ import recipesData from '@/data/recipes.json';
 import {
   Stage, STAGE_LABELS, STAGE_ICONS, STAGE_MONTHS, STAGE_ORDER, stageByMonths, stageProgress,
   PantryKind, KIND_LABELS, Storage, STORAGE_LABELS, IntakeRatio, INTAKE_LABELS,
-  getAgeMonths, todayStr, expiryStatus, ddayLabel, daysUntil, uid, ingredientEmoji,
+  getAgeMonths, todayStr, expiryStatus, ddayLabel, daysUntil, uid, ingredientEmoji, monthsBetween,
 } from '@/lib/meal';
-import { percentileFor, rankLabel, nutritionComment, PctResult } from '@/lib/growth';
+import { percentileFor, rankLabel, nutritionComment, PctResult, GROWTH_DATA, Metric } from '@/lib/growth';
 
 type Route = 'home' | 'fridge' | 'recipe' | 'log' | 'baby';
 
 interface Baby { id: number; name: string; birth_date: string; gender: 'boy' | 'girl'; share_code?: string; }
 interface PantryItem {
   id: string; kind: PantryKind; name: string; category: string | null; storage: Storage;
-  quantity: number | null; unit: string | null; cubeCount: number | null; cubeVolumeMl: number | null;
+  quantity: number | null; unit: string | null; cubeCount: number | null; cubeVolumeMl: number | null; cubeUnit: string | null;
   recipeRef: string | null; purchaseDate: string | null; openDate: string | null; cookedDate: string | null;
   expiryDate: string | null; forBabyId: number | null; note: string;
 }
@@ -34,6 +34,10 @@ interface FsRecipe { id: string; name: string; way: string; category: string; in
 
 interface IngredientRef { name: string; category: string; allowed_stage: Stage; allergen: boolean | string; forbidden_before_months?: number; default_expiry_days?: Record<string, number>; }
 const REF = (ingredientsRef as { ingredients: IngredientRef[] }).ingredients;
+const CAT_ORDER = ['곡류', '채소', '육류', '난류', '어류', '콩류', '과일', '유제품', '기타'];
+const BY_CAT: Record<string, IngredientRef[]> = {};
+for (const r of REF) (BY_CAT[r.category] ||= []).push(r);
+const CATS = CAT_ORDER.filter(c => BY_CAT[c]?.length);
 interface BuiltinRecipe { id: string; title: string; stage_tags: Stage[]; texture: string; ingredients: { name: string; amountG: number }[]; steps: string[]; nutrition: { kcal: number; protein: number; ironMg: number }; }
 const BUILTIN = (recipesData as { recipes: BuiltinRecipe[] }).recipes;
 
@@ -299,7 +303,7 @@ function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boo
             <div className="stock-body">
               <div className="t">{p.name}{p.forBabyId ? <span className="for-baby">전용</span> : null}</div>
               <div className="d">
-                {p.kind === 'cube' && p.cubeCount ? `${p.cubeCount}개${p.cubeVolumeMl ? ` × ${p.cubeVolumeMl}ml` : ''}` : (p.quantity ? `${p.quantity}${p.unit || ''}` : KIND_LABELS[p.kind])}
+                {p.kind === 'cube' && p.cubeCount ? `${p.cubeCount}개${p.cubeVolumeMl ? ` × ${p.cubeVolumeMl}${p.cubeUnit || 'ml'}` : ''}` : (p.quantity ? `${p.quantity}${p.unit || ''}` : KIND_LABELS[p.kind])}
                 {p.purchaseDate ? ` · ${p.purchaseDate.slice(5)} ${p.kind === 'cube' ? '소분' : '구매'}` : ''} · {STORAGE_LABELS[p.storage]}
               </div>
             </div>
@@ -512,7 +516,7 @@ function BabyScreen({ active, baby, babies, months, stage, growth, setApp, showT
         </div>
       )}
 
-      <GrowthSection gender={baby?.gender || 'girl'} months={months} growth={growth} onAdd={() => setGrowthSheet(true)} />
+      <GrowthSection gender={baby?.gender || 'girl'} months={months} birthDate={baby?.birth_date || ''} growth={growth} onAdd={() => setGrowthSheet(true)} />
 
       <div className="baby-section">
         <div className="section-head"><h3 className="h3">발달 체크 · 이유식 준비</h3></div>
@@ -543,7 +547,8 @@ function BabyScreen({ active, baby, babies, months, stage, growth, setApp, showT
   );
 }
 
-function GrowthSection({ gender, months, growth, onAdd }: { gender: 'boy' | 'girl'; months: number | null; growth: Growth[]; onAdd: () => void }) {
+function GrowthSection({ gender, months, birthDate, growth, onAdd }: { gender: 'boy' | 'girl'; months: number | null; birthDate: string; growth: Growth[]; onAdd: () => void }) {
+  const [metric, setMetric] = useState<Metric>('height');
   const latest = growth.length ? growth[growth.length - 1] : null;
   const mo = months;
   const wPct = latest?.weight != null && mo != null ? percentileFor('weight', gender, mo, latest.weight) : null;
@@ -555,7 +560,7 @@ function GrowthSection({ gender, months, growth, onAdd }: { gender: 'boy' | 'gir
     <div className="baby-section">
       <div className="section-head"><h3 className="h3">성장 기록</h3><span className="more" onClick={onAdd}>기록 추가 ›</span></div>
       {!latest ? (
-        <div className="growth-card"><div className="empty-note" style={{ padding: '10px 0' }}>키·몸무게를 입력하면 정상 백분위 중 어디에 있는지 보여드려요.</div></div>
+        <div className="growth-card"><div className="empty-note" style={{ padding: '10px 0' }}>키·몸무게를 입력하면 정상 백분위 중 어디에 있는지 그래프로 보여드려요.</div></div>
       ) : (
         <>
           <div className="growth-card">
@@ -564,6 +569,14 @@ function GrowthSection({ gender, months, growth, onAdd }: { gender: 'boy' | 'gir
             <MetricRow label="키" unit="cm" value={latest.height} pct={hPct} />
             <div className="growth-foot">WHO 성장도표 P3~P97 기준 · {latest.date} 측정{mo != null ? ` · ${mo}개월` : ''}</div>
           </div>
+          <div className="growth-card" style={{ marginTop: 8 }}>
+            <div className="seg" style={{ margin: '0 0 12px' }}>
+              <button className={metric === 'height' ? 'is-active' : ''} onClick={() => setMetric('height')}>키(cm)</button>
+              <button className={metric === 'weight' ? 'is-active' : ''} onClick={() => setMetric('weight')}>몸무게(kg)</button>
+            </div>
+            <GrowthChart metric={metric} gender={gender} birthDate={birthDate} growth={growth} />
+            <div className="growth-legend"><span><i className="lg-band" />정상범위(P3~P97)</span><span><i className="lg-p50" />중앙값(P50)</span><span><i className="lg-me" />우리 아기</span></div>
+          </div>
           <div className={`alert-card ${toneCls}`} style={{ marginTop: 8 }}>
             <span className="alert-ico">{comment.tone === 'warn' ? '⚠️' : comment.tone === 'watch' ? '🟡' : '🟢'}</span>
             <div className="alert-body"><div className="t">영양 코멘트</div><div className="d" style={{ marginTop: 3, lineHeight: 1.5 }}>{comment.text}</div></div>
@@ -571,6 +584,43 @@ function GrowthSection({ gender, months, growth, onAdd }: { gender: 'boy' | 'gir
         </>
       )}
     </div>
+  );
+}
+
+function GrowthChart({ metric, gender, birthDate, growth }: { metric: Metric; gender: 'boy' | 'girl'; birthDate: string; growth: Growth[] }) {
+  const W = 300, H = 190, padL = 30, padR = 10, padT = 10, padB = 22;
+  const band = GROWTH_DATA[gender][metric];
+  const maxM = 24;
+  const minV = band.P3[0], maxV = band.P97[maxM];
+  const x = (m: number) => padL + (Math.max(0, Math.min(maxM, m)) / maxM) * (W - padL - padR);
+  const y = (v: number) => padT + (1 - (v - minV) / (maxV - minV)) * (H - padT - padB);
+  const line = (arr: number[]) => arr.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const areaTop = band.P97.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const areaBot = [...band.P3].map((v, i) => ({ v, i })).reverse().map(({ v, i }) => `L${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const pts = growth
+    .filter(g => (metric === 'height' ? g.height : g.weight) != null && birthDate)
+    .map(g => ({ m: monthsBetween(birthDate, g.date), v: (metric === 'height' ? g.height : g.weight) as number }))
+    .filter(p => p.m <= maxM)
+    .sort((a, b) => a.m - b.m);
+  const yTicks = 4;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block' }}>
+      {/* y grid + labels */}
+      {Array.from({ length: yTicks + 1 }).map((_, i) => {
+        const v = minV + (maxV - minV) * (i / yTicks); const yy = y(v);
+        return <g key={i}><line x1={padL} y1={yy} x2={W - padR} y2={yy} stroke="var(--line)" strokeWidth="1" /><text x={padL - 4} y={yy + 3} textAnchor="end" fontSize="8" fill="var(--ink-4)">{Math.round(v)}</text></g>;
+      })}
+      {/* x labels (months) */}
+      {[0, 6, 12, 18, 24].map(m => <text key={m} x={x(m)} y={H - 8} textAnchor="middle" fontSize="8" fill="var(--ink-4)">{m}개월</text>)}
+      {/* normal band */}
+      <path d={`${areaTop} ${areaBot} Z`} fill="var(--green-100)" opacity="0.5" />
+      <path d={line(band.P3)} fill="none" stroke="var(--green-300)" strokeWidth="1" strokeDasharray="2 2" />
+      <path d={line(band.P97)} fill="none" stroke="var(--green-300)" strokeWidth="1" strokeDasharray="2 2" />
+      <path d={line(band.P50)} fill="none" stroke="var(--green-400)" strokeWidth="1.5" strokeDasharray="4 3" />
+      {/* baby line + points */}
+      {pts.length > 1 && <path d={pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.m).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')} fill="none" stroke="var(--orange-500)" strokeWidth="2" />}
+      {pts.map((p, i) => <circle key={i} cx={x(p.m)} cy={y(p.v)} r="3.2" fill="var(--orange-500)" stroke="#fff" strokeWidth="1.5" />)}
+    </svg>
   );
 }
 
@@ -619,25 +669,27 @@ function GrowthSheet({ babyId, onClose, setApp, showToast }: { babyId: number; o
 }
 
 // ── SHEETS ──────────────────────────────────────────────────
-function PantrySheet({ onClose, setApp, showToast }: { onClose: () => void; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void }) {
-  const [kind, setKind] = useState<PantryKind>('ingredient');
-  const [name, setName] = useState('');
-  const [storage, setStorage] = useState<Storage>('fridge');
-  const [purchaseDate, setPurchaseDate] = useState(todayStr());
-  const [expiryDate, setExpiryDate] = useState('');
-  const [cubeCount, setCubeCount] = useState('');
-  const [cubeVolumeMl, setCubeVolumeMl] = useState('');
-  const suggestions = REF.filter(r => name && r.name.includes(name)).slice(0, 6);
+function PantrySheet({ onClose, setApp, showToast, initial }: { onClose: () => void; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void; initial?: Partial<PantryItem> }) {
+  const [kind, setKind] = useState<PantryKind>(initial?.kind || 'ingredient');
+  const [name, setName] = useState(initial?.name || '');
+  const [cat, setCat] = useState<string>(initial?.category || '채소');
+  const [storage, setStorage] = useState<Storage>(initial?.storage || 'fridge');
+  const [purchaseDate, setPurchaseDate] = useState(initial?.purchaseDate || todayStr());
+  const [expiryDate, setExpiryDate] = useState(initial?.expiryDate || '');
+  const [cubeCount, setCubeCount] = useState(initial?.cubeCount ? String(initial.cubeCount) : '');
+  const [cubeVolume, setCubeVolume] = useState(initial?.cubeVolumeMl ? String(initial.cubeVolumeMl) : '');
+  const [cubeUnit, setCubeUnit] = useState(initial?.cubeUnit || 'ml');
 
-  function pick(r: IngredientRef) {
-    setName(r.name);
-    const days = r.default_expiry_days?.[storage];
+  function applyExpiry(nm: string, st: Storage) {
+    const r = REF.find(x => x.name === nm);
+    const days = r?.default_expiry_days?.[st];
     if (days != null) { const d = new Date(); d.setDate(d.getDate() + days); setExpiryDate(d.toISOString().slice(0, 10)); }
   }
+  function pick(r: IngredientRef) { setName(r.name); setCat(r.category); applyExpiry(r.name, storage); }
   function save() {
     if (!name.trim()) { showToast('재료명을 입력해 주세요'); return; }
-    const item: PantryItem = { id: uid(), kind, name: name.trim(), category: REF.find(r => r.name === name.trim())?.category || null, storage,
-      quantity: null, unit: null, cubeCount: cubeCount ? Number(cubeCount) : null, cubeVolumeMl: cubeVolumeMl ? Number(cubeVolumeMl) : null,
+    const item: PantryItem = { id: uid(), kind, name: name.trim(), category: REF.find(r => r.name === name.trim())?.category || cat, storage,
+      quantity: null, unit: null, cubeCount: cubeCount ? Number(cubeCount) : null, cubeVolumeMl: cubeVolume ? Number(cubeVolume) : null, cubeUnit,
       recipeRef: null, purchaseDate: purchaseDate || null, openDate: null, cookedDate: null, expiryDate: expiryDate || null, forBabyId: null, note: '' };
     setApp(s => ({ ...s, pantry: [item, ...s.pantry] }));
     fetch('/api/pantry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) }).catch(console.error);
@@ -648,11 +700,21 @@ function PantrySheet({ onClose, setApp, showToast }: { onClose: () => void; setA
       <div className="sheet" onClick={e => e.stopPropagation()}>
         <h3>재료 추가</h3>
         <div className="field"><label>종류</label><div className="chips-row">{(['ingredient', 'cube', 'prepared'] as PantryKind[]).map(k => <button key={k} className={`chip-pick${kind === k ? ' on' : ''}`} onClick={() => setKind(k)}>{KIND_LABELS[k]}</button>)}</div></div>
-        <div className="field"><label>이름</label><input value={name} onChange={e => setName(e.target.value)} placeholder="예: 애호박" />
-          {suggestions.length > 0 && <div className="chips-row" style={{ marginTop: 6 }}>{suggestions.map(r => <button key={r.name} className="chip-pick" onClick={() => pick(r)}>{r.name}</button>)}</div>}
+
+        <div className="field"><label>카테고리에서 빠르게 선택</label>
+          <div className="chips-row" style={{ marginBottom: 8 }}>{CATS.map(c => <button key={c} className={`chip-pick${cat === c ? ' on' : ''}`} onClick={() => setCat(c)}>{c}</button>)}</div>
+          <div className="chips-row">{(BY_CAT[cat] || []).map(r => <button key={r.name} className={`chip-pick${name === r.name ? ' on' : ''}`} onClick={() => pick(r)}>{ingredientEmoji(r.name)} {r.name}</button>)}</div>
         </div>
-        <div className="field"><label>보관</label><div className="chips-row">{STORAGE_ORDER.map(s => <button key={s} className={`chip-pick${storage === s ? ' on' : ''}`} onClick={() => setStorage(s)}>{STORAGE_LABELS[s]}</button>)}</div></div>
-        {kind === 'cube' && <div style={{ display: 'flex', gap: 8 }}><div className="field" style={{ flex: 1 }}><label>큐브 수</label><input type="number" value={cubeCount} onChange={e => setCubeCount(e.target.value)} placeholder="6" /></div><div className="field" style={{ flex: 1 }}><label>용량(ml)</label><input type="number" value={cubeVolumeMl} onChange={e => setCubeVolumeMl(e.target.value)} placeholder="30" /></div></div>}
+
+        <div className="field"><label>이름 (없으면 직접 입력)</label><input value={name} onChange={e => setName(e.target.value)} onBlur={() => applyExpiry(name, storage)} placeholder="예: 애호박" /></div>
+        <div className="field"><label>보관</label><div className="chips-row">{STORAGE_ORDER.map(s => <button key={s} className={`chip-pick${storage === s ? ' on' : ''}`} onClick={() => { setStorage(s); applyExpiry(name, s); }}>{STORAGE_LABELS[s]}</button>)}</div></div>
+        {kind === 'cube' && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div className="field" style={{ flex: 1 }}><label>큐브 수</label><input type="number" value={cubeCount} onChange={e => setCubeCount(e.target.value)} placeholder="6" /></div>
+            <div className="field" style={{ flex: 1 }}><label>1개 용량</label><input type="number" value={cubeVolume} onChange={e => setCubeVolume(e.target.value)} placeholder="30" /></div>
+            <div className="field" style={{ width: 92 }}><label>단위</label><div className="chips-row">{(['ml', 'g'] as const).map(u => <button key={u} className={`chip-pick${cubeUnit === u ? ' on' : ''}`} onClick={() => setCubeUnit(u)}>{u}</button>)}</div></div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8 }}><div className="field" style={{ flex: 1 }}><label>{kind === 'cube' ? '소분일' : '구매일'}</label><input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} /></div><div className="field" style={{ flex: 1 }}><label>소진기한</label><input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} /></div></div>
         <button className="btn-orange btn-full" onClick={save}>추가하기</button>
       </div>

@@ -282,6 +282,12 @@ a:hover{color:var(--orange-400)}
 .pct-track{position:relative;height:8px;border-radius:99px;background:linear-gradient(90deg,var(--pink-200),var(--green-200) 50%,var(--orange-200))}
 .pct-marker{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid var(--ink);transform:translate(-50%,-50%)}
 .pct-scale{display:flex;justify-content:space-between;font-size:10px;color:var(--ink-4);font-weight:600;margin-top:5px}
+.growth-legend{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:8px;font-size:10.5px;color:var(--ink-3);font-weight:600}
+.growth-legend span{display:inline-flex;align-items:center;gap:5px}
+.growth-legend i{width:14px;height:0;border-radius:2px;display:inline-block}
+.growth-legend .lg-band{height:9px;background:var(--green-100);border:1px solid var(--green-300)}
+.growth-legend .lg-p50{height:0;border-top:2px dashed var(--green-400)}
+.growth-legend .lg-me{height:0;border-top:2px solid var(--orange-500)}
 .dev-list{display:flex;flex-direction:column;gap:8px}
 .dev-check{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px 14px;display:flex;gap:12px;align-items:center;cursor:pointer}
 .checkbox{width:24px;height:24px;border-radius:50%;border:2px solid var(--line-2);background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}

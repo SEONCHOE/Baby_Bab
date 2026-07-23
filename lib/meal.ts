@@ -85,3 +85,22 @@ export function ddayLabel(dateStr: string | null | undefined): string {
 export function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
+
+// ── 재료 이모지 ─────────────────────────────────────────────
+const EMOJI: Record<string, string> = {
+  쌀: '🍚', 찹쌀: '🍚', 오트밀: '🥣', 감자: '🥔', 고구마: '🍠', 애호박: '🥒',
+  브로콜리: '🥦', 당근: '🥕', 청경채: '🥬', 시금치: '🥬', 양배추: '🥬',
+  소고기: '🥩', 닭고기: '🍗', 달걀노른자: '🥚', 흰살생선: '🐟', 두부: '⬜',
+  사과: '🍎', 배: '🍐', 바나나: '🍌', 꿀: '🍯', 생우유: '🥛',
+};
+export function ingredientEmoji(name: string): string {
+  for (const k of Object.keys(EMOJI)) if (name.includes(k)) return EMOJI[k];
+  return '🥣';
+}
+
+/** 이유식 단계 진행률(현재 단계 안에서의 %, 0~100) */
+export function stageProgress(months: number): number {
+  const ranges: Record<Stage, [number, number]> = { early: [4, 7], mid: [7, 10], late: [10, 13], finish: [13, 19] };
+  const [s, e] = ranges[stageByMonths(months)];
+  return Math.max(0, Math.min(100, Math.round(((months - s) / (e - s)) * 100)));
+}

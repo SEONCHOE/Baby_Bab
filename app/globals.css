@@ -81,6 +81,10 @@ a:hover{color:var(--orange-400)}
 .screen-sub{color:var(--ink-3);font-size:13px;margin-top:4px}
 .round-add{width:40px;height:40px;border-radius:50%;background:var(--grad-orange);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px rgba(255,130,60,.3);flex-shrink:0}
 .round-add.gear{background:var(--surface);color:var(--ink-2);border:1px solid var(--line);box-shadow:var(--shadow-sm)}
+.round-add.mic{background:var(--grad-green);color:#fff;box-shadow:0 6px 14px rgba(120,201,110,.32)}
+.round-add.mic.listening{animation:mic-breathe .8s ease-in-out infinite alternate;background:linear-gradient(135deg,#FF8585,#FF5E5E);box-shadow:0 6px 16px rgba(255,94,94,.4)}
+@keyframes mic-breathe{from{transform:scale(1)}to{transform:scale(1.12)}}
+.voice-hint{margin:0 18px 12px;background:var(--green-50);border:1px solid var(--green-200);color:var(--green-500);font-size:12px;font-weight:600;padding:9px 13px;border-radius:var(--r-md);line-height:1.5}
 .section{padding:0 18px;margin-bottom:18px}
 .section-head{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px;margin-bottom:10px}
 .section-head .more{font-size:12px;color:var(--ink-3);font-weight:600}

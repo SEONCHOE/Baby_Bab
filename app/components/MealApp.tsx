@@ -44,6 +44,33 @@ const BUILTIN = (recipesData as { recipes: BuiltinRecipe[] }).recipes;
 const empty: AppState = { pantry: [], mealLogs: [], savedRecipes: [], growth: [], assessments: [], feedingLogs: [] };
 const STORAGE_ORDER: Storage[] = ['fridge', 'freezer', 'room'];
 
+// Web Speech API (TS DOM lib 미포함분)
+interface SpeechResultLike { 0: { transcript: string }; isFinal: boolean; }
+interface SpeechEventLike extends Event { results: ArrayLike<SpeechResultLike>; }
+interface SpeechRecognitionLike {
+  lang: string; interimResults: boolean; continuous: boolean; maxAlternatives: number;
+  onresult: ((e: SpeechEventLike) => void) | null; onerror: ((e: Event) => void) | null; onend: (() => void) | null;
+  start(): void; stop(): void;
+}
+interface VoicePantry { kind?: PantryKind; name: string; storage?: Storage; quantity?: number | null; unit?: string | null; cubeCount?: number | null; cubeVolume?: number | null; cubeUnit?: string | null; }
+
+function pantryFromVoice(p: VoicePantry): PantryItem {
+  const ref = REF.find(r => r.name === p.name);
+  const storage: Storage = p.storage || 'fridge';
+  let expiryDate: string | null = null;
+  const days = ref?.default_expiry_days?.[storage];
+  if (days != null) { const d = new Date(); d.setDate(d.getDate() + days); expiryDate = d.toISOString().slice(0, 10); }
+  const today = todayStr();
+  const kind = p.kind || 'ingredient';
+  return {
+    id: uid(), kind, name: p.name, category: ref?.category || null, storage,
+    quantity: p.quantity ?? null, unit: p.unit || null,
+    cubeCount: p.cubeCount ?? null, cubeVolumeMl: p.cubeVolume ?? null, cubeUnit: p.cubeUnit || 'ml',
+    recipeRef: null, purchaseDate: today, openDate: null, cookedDate: kind !== 'ingredient' ? today : null,
+    expiryDate, forBabyId: null, note: '',
+  };
+}
+
 function stockBg(p: PantryItem): string {
   if (p.kind === 'prepared') return 'bg-solid';
   const c = p.category || '';
@@ -279,18 +306,61 @@ function HomeScreen({ active, baby, months, stage, app, go }: { active: boolean;
 // ── FRIDGE ──────────────────────────────────────────────────
 function FridgeScreen({ active, app, setApp, showToast, openAdd }: { active: boolean; app: AppState; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void; openAdd: () => void }) {
   const [filter, setFilter] = useState<'all' | PantryKind>('all');
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const lastItemRef = useRef<string | null>(null);
   const items = app.pantry.filter(p => filter === 'all' || p.kind === filter);
   function remove(id: string) {
     setApp(s => ({ ...s, pantry: s.pantry.filter(p => p.id !== id) }));
     fetch(`/api/pantry/${id}`, { method: 'DELETE' }).catch(console.error);
     showToast('삭제했어요');
   }
+
+  async function processVoice(transcript: string) {
+    showToast(`🎤 "${transcript}"`);
+    try {
+      const res = await fetch('/api/pantry-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript, lastItem: lastItemRef.current, candidates: REF.map(r => r.name) }) });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error === 'PREMIUM_REQUIRED' ? '프리미엄 기능이에요' : (data.error || '인식 실패')); return; }
+      const parsed: VoicePantry[] = (data.items || []).map((it: VoicePantry) => {
+        // 이름이 비었거나 "직전/이전 재료"로 나오면 직전 재료로 치환
+        if (!it.name?.trim() || /직전|이전|그거|같은/.test(it.name)) it.name = lastItemRef.current || it.name;
+        return it;
+      }).filter((it: VoicePantry) => it.name?.trim());
+      if (parsed.length === 0) { showToast('재료를 이해하지 못했어요. 다시 말해주세요'); return; }
+      const newItems = parsed.map(pantryFromVoice);
+      setApp(s => ({ ...s, pantry: [...newItems, ...s.pantry] }));
+      newItems.forEach(it => fetch('/api/pantry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(it) }).catch(console.error));
+      lastItemRef.current = newItems[newItems.length - 1].name;
+      showToast(`🎤 ${newItems.map(i => i.name).join(', ')} 추가했어요`);
+    } catch { showToast('음성 처리 오류'); }
+  }
+
+  function startVoice() {
+    const SR = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
+      || (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition;
+    if (!SR) { showToast('이 브라우저는 음성 인식을 지원하지 않아요'); return; }
+    if (listening) { recRef.current?.stop(); return; }
+    const rec = new SR();
+    rec.lang = 'ko-KR'; rec.interimResults = false; rec.continuous = false; rec.maxAlternatives = 1;
+    let done = false;
+    rec.onresult = (e) => { const t = Array.from(e.results).map(r => r[0].transcript).join('').trim(); if (t && !done) { done = true; rec.stop(); processVoice(t); } };
+    rec.onerror = () => { setListening(false); showToast('🎤 음성을 못 들었어요'); };
+    rec.onend = () => setListening(false);
+    recRef.current = rec; setListening(true); rec.start();
+  }
+
   return (
     <section className={`screen${active ? ' is-active' : ''}`}>
       <div className="screen-header">
         <div><div className="screen-title">냉장고</div><div className="screen-sub">가구 공용 재고 · {app.pantry.length}개 항목</div></div>
-        <button className="round-add" onClick={openAdd} aria-label="재료 추가"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg></button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className={`round-add mic${listening ? ' listening' : ''}`} onClick={startVoice} aria-label="음성으로 추가"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3zM19 10a7 7 0 01-14 0M12 17v4" /></svg></button>
+          <button className="round-add" onClick={openAdd} aria-label="재료 추가"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg></button>
+        </div>
       </div>
+      {listening && <div className="voice-hint">🎤 듣는 중… &ldquo;당근 오늘 한 개 샀어&rdquo; / &ldquo;소분해서 30g씩 6개 냉동했어&rdquo;</div>}
       <div className="seg">
         {(['all', 'ingredient', 'cube', 'prepared'] as const).map(f => (
           <button key={f} className={filter === f ? 'is-active' : ''} onClick={() => setFilter(f)}>{f === 'all' ? '전체' : KIND_LABELS[f]}</button>

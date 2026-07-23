@@ -23,6 +23,7 @@ interface MealLog {
   id: string; babyId: number; date: string | null; time: string | null; menuName: string;
   recipeRef: string | null; intakeRatio: IntakeRatio | null; estimatedKcal: number | null;
   reaction: string; adverseFlag: boolean; adverseNote: string; isNewIngredient: boolean; newIngredientName: string;
+  beforeMl: number | null; afterMl: number | null;
 }
 interface FeedingLog { id: string; date: string; time: string | null; amount: number | null; feedType: string | null; note: string; }
 interface Growth { id: string; date: string; height: number | null; weight: number | null; }
@@ -424,7 +425,10 @@ function LogScreen({ active, app, openAdd }: { active: boolean; app: AppState; o
   const [tab, setTab] = useState<'timeline' | 'album'>('timeline');
   const events = [
     ...app.feedingLogs.map(f => ({ kind: 'feed' as const, date: f.date, time: f.time, id: f.id, ttl: `${f.feedType || '수유'}`, sub: '아기의 기록 연동', amt: f.amount ? `${f.amount}ml` : '', isNew: false })),
-    ...app.mealLogs.map(m => ({ kind: 'solid' as const, date: m.date || '', time: m.time, id: m.id, ttl: `${m.menuName || '이유식'} ${ingredientEmoji(m.menuName)}`, sub: `이유식${m.intakeRatio ? ` · ${INTAKE_LABELS[m.intakeRatio]}` : ''}${m.adverseFlag ? ' · ⚠️이상반응' : ''}`, amt: m.reaction || '', isNew: m.isNewIngredient })),
+    ...app.mealLogs.map(m => {
+      const intake = m.beforeMl != null && m.afterMl != null ? Math.max(0, m.beforeMl - m.afterMl) : null;
+      return { kind: 'solid' as const, date: m.date || '', time: m.time, id: m.id, ttl: `${m.menuName || '이유식'} ${ingredientEmoji(m.menuName)}`, sub: `이유식${m.intakeRatio ? ` · ${INTAKE_LABELS[m.intakeRatio]}` : ''}${m.adverseFlag ? ' · ⚠️이상반응' : ''}`, amt: intake != null ? `${intake}ml` : (m.reaction || ''), isNew: m.isNewIngredient };
+    }),
   ].sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
   const byDate = events.reduce<Record<string, typeof events>>((acc, e) => { (acc[e.date] ||= []).push(e); return acc; }, {});
   const introduced = Array.from(new Set(app.mealLogs.filter(m => m.newIngredientName).map(m => m.newIngredientName)));
@@ -603,11 +607,21 @@ function MealSheet({ babyId, onClose, setApp, showToast }: { babyId: number; onC
   const [intakeRatio, setIntakeRatio] = useState<IntakeRatio>('all');
   const [reaction, setReaction] = useState('');
   const [adverseFlag, setAdverseFlag] = useState(false);
+  const [before, setBefore] = useState('');
+  const [after, setAfter] = useState('');
   const now = new Date();
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const beforeN = before === '' ? null : Number(before);
+  const afterN = after === '' ? null : Number(after);
+  const intakeMl = beforeN != null && afterN != null ? Math.max(0, beforeN - afterN) : null;
+  // 눈금 입력이 있으면 섭취 비율 자동 판정
+  const autoRatio: IntakeRatio | null = (intakeMl != null && beforeN) ? (() => {
+    const r = intakeMl / beforeN;
+    return r >= 0.9 ? 'all' : r >= 0.4 ? 'half' : r > 0 ? 'little' : 'refused';
+  })() : null;
   function save() {
     if (!menuName.trim()) { showToast('메뉴를 입력해 주세요'); return; }
-    const m: MealLog = { id: uid(), babyId, date: todayStr(), time, menuName: menuName.trim(), recipeRef: null, intakeRatio, estimatedKcal: null, reaction: reaction.trim(), adverseFlag, adverseNote: '', isNewIngredient: false, newIngredientName: '' };
+    const m: MealLog = { id: uid(), babyId, date: todayStr(), time, menuName: menuName.trim(), recipeRef: null, intakeRatio: autoRatio || intakeRatio, estimatedKcal: null, reaction: reaction.trim(), adverseFlag, adverseNote: '', isNewIngredient: false, newIngredientName: '', beforeMl: beforeN, afterMl: afterN };
     setApp(s => ({ ...s, mealLogs: [m, ...s.mealLogs] }));
     fetch('/api/meal-logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(m) }).catch(console.error);
     showToast('식사를 기록했어요'); onClose();
@@ -617,7 +631,14 @@ function MealSheet({ babyId, onClose, setApp, showToast }: { babyId: number; onC
       <div className="sheet" onClick={e => e.stopPropagation()}>
         <h3>이유식 기록</h3>
         <div className="field"><label>메뉴</label><input value={menuName} onChange={e => setMenuName(e.target.value)} placeholder="예: 소고기 애호박죽" /></div>
-        <div className="field"><label>섭취량</label><div className="chips-row">{(['all', 'half', 'little', 'refused'] as IntakeRatio[]).map(r => <button key={r} className={`chip-pick${intakeRatio === r ? ' on' : ''}`} onClick={() => setIntakeRatio(r)}>{INTAKE_LABELS[r]}</button>)}</div></div>
+        <div className="field"><label>눈금으로 먹은 양 계산 (선택)</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input type="number" inputMode="numeric" value={before} onChange={e => setBefore(e.target.value)} placeholder="식사 전 ml" />
+            <input type="number" inputMode="numeric" value={after} onChange={e => setAfter(e.target.value)} placeholder="남긴 양 ml" />
+          </div>
+          {intakeMl != null && <div className="intake-calc">🍽 먹은 양 <b>{intakeMl}ml</b>{autoRatio ? ` · ${INTAKE_LABELS[autoRatio]}` : ''}</div>}
+        </div>
+        {intakeMl == null && <div className="field"><label>섭취량</label><div className="chips-row">{(['all', 'half', 'little', 'refused'] as IntakeRatio[]).map(r => <button key={r} className={`chip-pick${intakeRatio === r ? ' on' : ''}`} onClick={() => setIntakeRatio(r)}>{INTAKE_LABELS[r]}</button>)}</div></div>}
         <div className="field"><label>반응 메모</label><textarea value={reaction} onChange={e => setReaction(e.target.value)} placeholder="잘 먹었어요 / 입에 안 맞아 했어요" /></div>
         <div className="field"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}><input type="checkbox" checked={adverseFlag} onChange={e => setAdverseFlag(e.target.checked)} style={{ width: 'auto' }} />이상반응(발진·구토·설사 등)이 있었어요</label></div>
         <button className="btn-orange btn-full" onClick={save}>기록하기</button>

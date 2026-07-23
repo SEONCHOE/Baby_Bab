@@ -172,6 +172,8 @@ CREATE TABLE IF NOT EXISTS meal_logs (
   new_ingredient_name varchar(100),
   cubes_used          jsonb,
   note                text,
+  before_amount_ml    integer,
+  after_amount_ml     integer,
   created_at          bigint
 );
 CREATE INDEX IF NOT EXISTS idx_meallog_baby ON meal_logs(baby_id, log_date);

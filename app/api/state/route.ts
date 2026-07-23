@@ -70,6 +70,7 @@ function mapMealLog(r: RowDataPacket) {
     estimatedIntakeG: r.estimated_intake_g ?? null, estimatedKcal: r.estimated_kcal ?? null,
     reaction: r.reaction || '', adverseFlag: !!r.adverse_flag, adverseNote: r.adverse_note || '',
     isNewIngredient: !!r.is_new_ingredient, newIngredientName: r.new_ingredient_name || '',
+    beforeMl: r.before_amount_ml ?? null, afterMl: r.after_amount_ml ?? null,
     cubesUsed: j<unknown[]>(r.cubes_used, []), note: r.note || '',
   };
 }

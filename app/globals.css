@@ -323,6 +323,8 @@ a:hover{color:var(--orange-400)}
 .chips-row{display:flex;gap:6px;flex-wrap:wrap}
 .chip-pick{font-size:12.5px;font-weight:600;padding:8px 13px;border-radius:var(--r-pill);border:1.5px solid var(--line);background:var(--surface-2);color:var(--ink-2)}
 .chip-pick.on{background:var(--orange-400);border-color:var(--orange-400);color:#fff}
+.intake-calc{margin-top:8px;background:var(--green-50);border:1px solid var(--green-200);color:var(--green-500);font-size:13px;font-weight:600;padding:9px 12px;border-radius:var(--r-md)}
+.intake-calc b{font-size:16px;color:var(--green-500)}
 .toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%) translateY(12px);background:rgba(45,36,27,.92);color:#fff;font-size:13px;font-weight:600;padding:11px 18px;border-radius:var(--r-pill);z-index:90;opacity:0;pointer-events:none;transition:all .25s;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .empty-note{text-align:center;color:var(--ink-4);font-size:13px;padding:26px 18px}

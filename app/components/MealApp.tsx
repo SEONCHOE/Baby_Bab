@@ -510,13 +510,15 @@ function RecipeScreen({ active, baby, months, stage, app, showToast }: { active:
   const [fsExpand, setFsExpand] = useState<string | null>(null);
   const [labelLoading, setLabelLoading] = useState(false);
   const [label, setLabel] = useState<LabelResult | null>(null);
+  const [labelTarget, setLabelTarget] = useState<'baby' | 'mother'>('baby');
+  const [motherConds, setMotherConds] = useState<string[]>(['모유수유 중']);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function scanLabel(file: File) {
     setLabelLoading(true); setLabel(null);
     try {
       const image = await fileToResizedDataUrl(file);
-      const res = await fetch('/api/label-scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, months, stageLabel: STAGE_LABELS[stage] }) });
+      const res = await fetch('/api/label-scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, target: labelTarget, months, stageLabel: STAGE_LABELS[stage], conditions: labelTarget === 'mother' ? motherConds : [] }) });
       const data = await res.json();
       if (!res.ok) { showToast(data.error === 'PREMIUM_REQUIRED' ? '프리미엄 기능이에요' : (data.error || '분석 실패')); return; }
       setLabel(data);
@@ -617,12 +619,23 @@ function RecipeScreen({ active, baby, months, stage, app, showToast }: { active:
       </div>
 
       <div className="section">
-        <div className="section-head"><h3 className="h3">성분표 분석</h3><span className="more">시판 이유식·간식</span></div>
+        <div className="section-head"><h3 className="h3">성분표 분석</h3><span className="more">시판 식품 적합성</span></div>
+        <div className="seg" style={{ margin: '0 0 12px' }}>
+          <button className={labelTarget === 'baby' ? 'is-active' : ''} onClick={() => setLabelTarget('baby')}>👶 아기</button>
+          <button className={labelTarget === 'mother' ? 'is-active' : ''} onClick={() => setLabelTarget('mother')}>🤱 엄마</button>
+        </div>
+        {labelTarget === 'mother' && (
+          <div className="chips-row" style={{ marginBottom: 12 }}>
+            {['모유수유 중', '산후 체중관리', '임신성 당뇨 이력', '빈혈·철분', '부종·나트륨 주의'].map(c => (
+              <button key={c} className={`chip-pick${motherConds.includes(c) ? ' on' : ''}`} onClick={() => setMotherConds(s => s.includes(c) ? s.filter(x => x !== c) : [...s, c])}>{c}</button>
+            ))}
+          </div>
+        )}
         <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={e => { const f = e.target.files?.[0]; if (f) scanLabel(f); e.currentTarget.value = ''; }} />
         <button className="btn-orange btn-full" onClick={() => fileRef.current?.click()}>📷 영양성분표 촬영·업로드</button>
         {labelLoading && <div className="empty-note">🔎 성분표를 분석하는 중…</div>}
         {label && <div style={{ marginTop: 10 }}><LabelResultCard r={label} /></div>}
-        <p className="disclaimer">{baby?.name} {months != null ? `${months}개월` : ''} 기준으로 사진 속 표기값을 분석해요. 알레르기·월령 판단은 소아과 상담을 함께 권해요.</p>
+        <p className="disclaimer">{labelTarget === 'baby' ? `${baby?.name || '아기'} ${months != null ? `${months}개월` : ''} 기준으로 분석해요.` : '엄마 상태 기준으로 분석해요.'} 사진 속 표기값 기반 추정이며, 정확한 판단은 전문가 상담을 권해요.</p>
       </div>
     </section>
   );

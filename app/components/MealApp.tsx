@@ -28,6 +28,7 @@ interface FeedingLog { id: string; date: string; time: string | null; amount: nu
 interface Growth { id: string; date: string; height: number | null; weight: number | null; }
 interface AppState { pantry: PantryItem[]; mealLogs: MealLog[]; savedRecipes: unknown[]; growth: Growth[]; assessments: unknown[]; feedingLogs: FeedingLog[]; }
 interface RecipeReco { title: string; ingredients: { name: string; amountG: number }[]; steps: string[]; missing: string[]; nutrition: { kcal: number; protein: number; ironMg: number }; }
+interface FsRecipe { id: string; name: string; way: string; category: string; ingredients: string; steps: string[]; image: string; nutrition: { kcal: string; protein: string }; hashTag: string; }
 
 interface IngredientRef { name: string; category: string; allowed_stage: Stage; allergen: boolean | string; forbidden_before_months?: number; default_expiry_days?: Record<string, number>; }
 const REF = (ingredientsRef as { ingredients: IngredientRef[] }).ingredients;
@@ -317,6 +318,19 @@ function RecipeScreen({ active, baby, months, stage, app, showToast }: { active:
   const [mode, setMode] = useState<'stock_only' | 'buy_few' | 'fresh_shop'>('stock_only');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ reason: string; recipes: RecipeReco[] } | null>(null);
+  const [fsQ, setFsQ] = useState('');
+  const [fsLoading, setFsLoading] = useState(false);
+  const [fsList, setFsList] = useState<FsRecipe[] | null>(null);
+  const [fsExpand, setFsExpand] = useState<string | null>(null);
+
+  async function searchFs() {
+    setFsLoading(true); setFsList(null);
+    try {
+      const res = await fetch(`/api/foodsafety?q=${encodeURIComponent(fsQ.trim())}`);
+      const data = await res.json();
+      setFsList(data.recipes || []);
+    } catch { showToast('레시피 검색 오류'); } finally { setFsLoading(false); }
+  }
 
   const allowed = STAGE_ORDER.slice(0, STAGE_ORDER.indexOf(stage) + 1);
   const candidates = REF.filter(r => allowed.includes(r.allowed_stage) && !(r.forbidden_before_months && months != null && months < r.forbidden_before_months)).map(r => r.name);
@@ -376,6 +390,31 @@ function RecipeScreen({ active, baby, months, stage, app, showToast }: { active:
         ))}
       </div>
       <p className="disclaimer">단계·알레르기에 맞지 않는 재료는 추천에서 자동 제외돼요. 소아과 상담을 권해요.</p>
+
+      <div className="section">
+        <div className="section-head"><h3 className="h3">레시피 찾아보기</h3><span className="more">식약처 레시피 DB</span></div>
+        <div className="fs-search">
+          <input value={fsQ} onChange={e => setFsQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchFs()} placeholder="예: 두부, 애호박, 미음…" />
+          <button className="btn-orange" onClick={searchFs}>검색</button>
+        </div>
+        {fsLoading && <div className="empty-note">레시피를 찾는 중…</div>}
+        {fsList && fsList.length === 0 && <div className="empty-note">결과가 없어요. (전체 검색은 API 키 발급 후 가능)</div>}
+        {fsList && fsList.map(r => (
+          <div key={r.id} className="recipe-card" style={{ flexDirection: 'column', gap: 10 }} onClick={() => setFsExpand(fsExpand === r.id ? null : r.id)}>
+            <div style={{ display: 'flex', gap: 14 }}>
+              {r.image ? <img src={r.image} alt="" className="recipe-thumb" style={{ objectFit: 'cover' }} /> : <div className="recipe-thumb bg-thumb-3">🍽️</div>}
+              <div className="recipe-info">
+                <div className="recipe-badges"><span className="rb rb-stage">{r.category || '요리'}</span>{r.way && <span className="rb rb-match">{r.way}</span>}</div>
+                <div className="recipe-title">{r.name}</div>
+                <div className="recipe-meta">{r.ingredients.slice(0, 48)}{r.ingredients.length > 48 ? '…' : ''}</div>
+                {(r.nutrition.kcal || r.nutrition.protein) && <div className="recipe-nutri">{r.nutrition.kcal && <span>🔥 {r.nutrition.kcal}kcal</span>}{r.nutrition.protein && <span>🥚 {r.nutrition.protein}g</span>}</div>}
+              </div>
+            </div>
+            {fsExpand === r.id && r.steps.length > 0 && <ol className="recipe-steps">{r.steps.map((s, j) => <li key={j}>{s}</li>)}</ol>}
+          </div>
+        ))}
+        <p className="disclaimer">출처: 식품의약품안전처 조리식품 레시피 DB(이용허락 제한 없음). 아기 이유식용은 단계·알레르기에 맞게 재료를 조정하세요.</p>
+      </div>
     </section>
   );
 }

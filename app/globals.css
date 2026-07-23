@@ -353,6 +353,12 @@ a:hover{color:var(--orange-400)}
 .nutri-line{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
 .nutri-line span{font-size:11px;font-weight:600;color:var(--ink-2);background:var(--surface-3);padding:3px 8px;border-radius:var(--r-pill)}
 .nutri-line span.na-high{background:var(--pink-50);color:var(--pink-400)}
+.label-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.label-head b{font-size:15px}
+.verdict{font-size:12px;font-weight:700;padding:4px 11px;border-radius:var(--r-pill)}
+.verdict.ok{background:var(--green-50);color:var(--green-500)}
+.verdict.caution{background:var(--orange-50);color:var(--orange-500)}
+.verdict.avoid{background:var(--pink-50);color:var(--pink-400)}
 .toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%) translateY(12px);background:rgba(45,36,27,.92);color:#fff;font-size:13px;font-weight:600;padding:11px 18px;border-radius:var(--r-pill);z-index:90;opacity:0;pointer-events:none;transition:all .25s;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .empty-note{text-align:center;color:var(--ink-4);font-size:13px;padding:26px 18px}

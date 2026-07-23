@@ -35,6 +35,38 @@ interface Growth { id: string; date: string; height: number | null; weight: numb
 interface AppState { pantry: PantryItem[]; mealLogs: MealLog[]; savedRecipes: unknown[]; growth: Growth[]; assessments: unknown[]; feedingLogs: FeedingLog[]; }
 interface RecipeReco { title: string; ingredients: { name: string; amountG: number }[]; steps: string[]; missing: string[]; nutrition: { kcal: number; protein: number; ironMg: number }; }
 interface FsRecipe { id: string; name: string; way: string; category: string; ingredients: string; steps: string[]; image: string; nutrition: { kcal: string; protein: string }; hashTag: string; }
+interface LabelResult { productName: string | null; servingSize: string | null; nutrients: { kcal: number | null; sodiumMg: number | null; sugarG: number | null; proteinG: number | null; fatG: number | null }; allergens: string[]; verdict: 'ok' | 'caution' | 'avoid'; reasons: string[]; substitutes: string[]; }
+
+async function fileToResizedDataUrl(file: File, maxDim = 1100): Promise<string> {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+  const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+  const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+  const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+  canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+  URL.revokeObjectURL(url);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
+function LabelResultCard({ r }: { r: LabelResult }) {
+  const tone = r.verdict === 'avoid' ? 'avoid' : r.verdict === 'caution' ? 'caution' : 'ok';
+  const label = r.verdict === 'avoid' ? '부적합' : r.verdict === 'caution' ? '주의' : '적절';
+  return (
+    <div className="section-card">
+      <div className="label-head"><span className={`verdict ${tone}`}>{label}</span>{r.productName && <b>{r.productName}</b>}{r.servingSize && <span className="muted" style={{ fontSize: 12 }}>{r.servingSize}</span>}</div>
+      <div className="recipe-nutri" style={{ marginTop: 8 }}>
+        {r.nutrients.kcal != null && <span>🔥 {r.nutrients.kcal}kcal</span>}
+        {r.nutrients.sodiumMg != null && <span>🧂 나트륨 {r.nutrients.sodiumMg}mg</span>}
+        {r.nutrients.sugarG != null && <span>🍬 당류 {r.nutrients.sugarG}g</span>}
+        {r.nutrients.proteinG != null && <span>🥚 단백질 {r.nutrients.proteinG}g</span>}
+      </div>
+      {r.allergens.length > 0 && <div className="new-warn" style={{ marginTop: 8 }}>⚠️ 알레르기 유발: {r.allergens.join(', ')}</div>}
+      {r.reasons.length > 0 && <ul className="recipe-steps" style={{ marginTop: 8 }}>{r.reasons.map((s, i) => <li key={i}>{s}</li>)}</ul>}
+      {r.substitutes.length > 0 && <div className="new-warn" style={{ background: 'var(--green-50)', color: 'var(--green-500)', marginTop: 8 }}>💡 대체 추천: {r.substitutes.join(' · ')}</div>}
+    </div>
+  );
+}
 
 interface IngredientRef { name: string; category: string; allowed_stage: Stage; allergen: boolean | string; forbidden_before_months?: number; default_expiry_days?: Record<string, number>; }
 const REF = (ingredientsRef as { ingredients: IngredientRef[] }).ingredients;
@@ -476,6 +508,20 @@ function RecipeScreen({ active, baby, months, stage, app, showToast }: { active:
   const [fsLoading, setFsLoading] = useState(false);
   const [fsList, setFsList] = useState<FsRecipe[] | null>(null);
   const [fsExpand, setFsExpand] = useState<string | null>(null);
+  const [labelLoading, setLabelLoading] = useState(false);
+  const [label, setLabel] = useState<LabelResult | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function scanLabel(file: File) {
+    setLabelLoading(true); setLabel(null);
+    try {
+      const image = await fileToResizedDataUrl(file);
+      const res = await fetch('/api/label-scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, months, stageLabel: STAGE_LABELS[stage] }) });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error === 'PREMIUM_REQUIRED' ? '프리미엄 기능이에요' : (data.error || '분석 실패')); return; }
+      setLabel(data);
+    } catch { showToast('분석 중 오류가 발생했어요'); } finally { setLabelLoading(false); }
+  }
 
   async function searchFs() {
     setFsLoading(true); setFsList(null);
@@ -568,6 +614,15 @@ function RecipeScreen({ active, baby, months, stage, app, showToast }: { active:
           </div>
         ))}
         <p className="disclaimer">출처: 식품의약품안전처 조리식품 레시피 DB(이용허락 제한 없음). 아기 이유식용은 단계·알레르기에 맞게 재료를 조정하세요.</p>
+      </div>
+
+      <div className="section">
+        <div className="section-head"><h3 className="h3">성분표 분석</h3><span className="more">시판 이유식·간식</span></div>
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={e => { const f = e.target.files?.[0]; if (f) scanLabel(f); e.currentTarget.value = ''; }} />
+        <button className="btn-orange btn-full" onClick={() => fileRef.current?.click()}>📷 영양성분표 촬영·업로드</button>
+        {labelLoading && <div className="empty-note">🔎 성분표를 분석하는 중…</div>}
+        {label && <div style={{ marginTop: 10 }}><LabelResultCard r={label} /></div>}
+        <p className="disclaimer">{baby?.name} {months != null ? `${months}개월` : ''} 기준으로 사진 속 표기값을 분석해요. 알레르기·월령 판단은 소아과 상담을 함께 권해요.</p>
       </div>
     </section>
   );

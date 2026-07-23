@@ -6,7 +6,7 @@ const FIELD_MAP: Record<string, string> = {
   kind: 'kind', name: 'name', category: 'category', storage: 'storage', quantity: 'quantity',
   unit: 'unit', cubeCount: 'cube_count', cubeVolumeMl: 'cube_volume_ml', cubeUnit: 'cube_unit', recipeRef: 'recipe_ref',
   purchaseDate: 'purchase_date', openDate: 'open_date', cookedDate: 'cooked_date',
-  expiryDate: 'expiry_date', forBabyId: 'for_baby_id', note: 'note',
+  expiryDate: 'expiry_date', forBabyId: 'for_baby_id', note: 'note', totalG: 'total_g', remainingG: 'remaining_g',
 };
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

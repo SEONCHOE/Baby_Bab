@@ -149,6 +149,9 @@ CREATE TABLE IF NOT EXISTS pantry_items (
   expiry_date    date,
   for_baby_id    integer,
   note           text,
+  composition    jsonb,
+  total_g        integer,
+  remaining_g    integer,
   created_at     bigint,
   updated_at     timestamptz DEFAULT now()
 );
@@ -175,6 +178,9 @@ CREATE TABLE IF NOT EXISTS meal_logs (
   note                text,
   before_amount_ml    integer,
   after_amount_ml     integer,
+  composition         jsonb,
+  batch_total_g       integer,
+  batch_ref           varchar(36),
   created_at          bigint
 );
 CREATE INDEX IF NOT EXISTS idx_meallog_baby ON meal_logs(baby_id, log_date);

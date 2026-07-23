@@ -54,6 +54,7 @@ function mapPantry(r: RowDataPacket) {
     cubeCount: r.cube_count ?? null, cubeVolumeMl: r.cube_volume_ml ?? null, cubeUnit: r.cube_unit || 'ml', recipeRef: r.recipe_ref || null,
     purchaseDate: d(r.purchase_date), openDate: d(r.open_date), cookedDate: d(r.cooked_date), expiryDate: d(r.expiry_date),
     forBabyId: r.for_baby_id ?? null, note: r.note || '',
+    composition: j<unknown[]>(r.composition, []), totalG: r.total_g ?? null, remainingG: r.remaining_g ?? null,
   };
 }
 function mapRecipe(r: RowDataPacket) {
@@ -71,6 +72,7 @@ function mapMealLog(r: RowDataPacket) {
     reaction: r.reaction || '', adverseFlag: !!r.adverse_flag, adverseNote: r.adverse_note || '',
     isNewIngredient: !!r.is_new_ingredient, newIngredientName: r.new_ingredient_name || '',
     beforeMl: r.before_amount_ml ?? null, afterMl: r.after_amount_ml ?? null,
+    composition: j<unknown[]>(r.composition, []), batchTotalG: r.batch_total_g ?? null, batchRef: r.batch_ref || null,
     cubesUsed: j<unknown[]>(r.cubes_used, []), note: r.note || '',
   };
 }

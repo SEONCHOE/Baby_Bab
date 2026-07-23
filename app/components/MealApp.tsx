@@ -8,6 +8,7 @@ import {
   Stage, STAGE_LABELS, STAGE_ICONS, STAGE_MONTHS, STAGE_ORDER, stageByMonths, stageProgress,
   PantryKind, KIND_LABELS, Storage, STORAGE_LABELS, IntakeRatio, INTAKE_LABELS,
   getAgeMonths, todayStr, expiryStatus, ddayLabel, daysUntil, uid, ingredientEmoji, monthsBetween,
+  CompItem, FoodGroup, FOOD_GROUPS, GROUP_COLORS, groupBreakdown, ingredientGroup,
 } from '@/lib/meal';
 import { percentileFor, rankLabel, nutritionComment, PctResult, GROWTH_DATA, Metric } from '@/lib/growth';
 
@@ -19,12 +20,14 @@ interface PantryItem {
   quantity: number | null; unit: string | null; cubeCount: number | null; cubeVolumeMl: number | null; cubeUnit: string | null;
   recipeRef: string | null; purchaseDate: string | null; openDate: string | null; cookedDate: string | null;
   expiryDate: string | null; forBabyId: number | null; note: string;
+  composition?: CompItem[]; totalG?: number | null; remainingG?: number | null;
 }
 interface MealLog {
   id: string; babyId: number; date: string | null; time: string | null; menuName: string;
   recipeRef: string | null; intakeRatio: IntakeRatio | null; estimatedKcal: number | null;
   reaction: string; adverseFlag: boolean; adverseNote: string; isNewIngredient: boolean; newIngredientName: string;
-  beforeMl: number | null; afterMl: number | null;
+  beforeMl: number | null; afterMl: number | null; estimatedIntakeG?: number | null;
+  composition?: CompItem[]; batchTotalG?: number | null; batchRef?: string | null;
 }
 interface FeedingLog { id: string; date: string; time: string | null; amount: number | null; feedType: string | null; note: string; }
 interface Growth { id: string; date: string; height: number | null; weight: number | null; }
@@ -87,7 +90,7 @@ export default function MealApp() {
   const [app, setApp] = useState<AppState>(empty);
   const [route, setRoute] = useState<Route>('home');
   const [toast, setToast] = useState({ msg: '', show: false });
-  const [sheet, setSheet] = useState<null | 'pantry' | 'meal' | 'babySwitch'>(null);
+  const [sheet, setSheet] = useState<null | 'pantry' | 'meal' | 'batch' | 'logAdd' | 'babySwitch'>(null);
   const tt = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const baby = useMemo(() => babies.find(b => b.id === activeBabyId) || null, [babies, activeBabyId]);
@@ -173,8 +176,8 @@ export default function MealApp() {
             <HomeScreen active={route === 'home'} baby={baby} months={months} stage={stage} app={app} go={go} />
             <FridgeScreen active={route === 'fridge'} app={app} setApp={setApp} showToast={showToast} openAdd={() => setSheet('pantry')} />
             <RecipeScreen active={route === 'recipe'} baby={baby} months={months} stage={stage} app={app} showToast={showToast} />
-            <LogScreen active={route === 'log'} app={app} openAdd={() => setSheet('meal')} />
-            <BabyScreen active={route === 'baby'} baby={baby} babies={babies} months={months} stage={stage} growth={app.growth} setApp={setApp} showToast={showToast} setActiveBabyId={setActiveBabyId} />
+            <LogScreen active={route === 'log'} app={app} openAdd={() => setSheet('logAdd')} />
+            <BabyScreen active={route === 'baby'} baby={baby} babies={babies} months={months} stage={stage} growth={app.growth} mealLogs={app.mealLogs} setApp={setApp} showToast={showToast} setActiveBabyId={setActiveBabyId} />
           </>
         )}
 
@@ -190,7 +193,17 @@ export default function MealApp() {
         </nav>
 
         {sheet === 'pantry' && <PantrySheet onClose={() => setSheet(null)} setApp={setApp} showToast={showToast} />}
-        {sheet === 'meal' && baby && <MealSheet babyId={baby.id} onClose={() => setSheet(null)} setApp={setApp} showToast={showToast} />}
+        {sheet === 'logAdd' && (
+          <div className="modal-scrim" onClick={() => setSheet(null)}>
+            <div className="sheet" onClick={e => e.stopPropagation()}>
+              <h3>무엇을 기록할까요?</h3>
+              <button className="choice-row" onClick={() => setSheet('meal')}><span>🍽️</span><div><b>끼니 기록</b><i>먹은 양(g)·반응·이상반응</i></div></button>
+              <button className="choice-row" onClick={() => setSheet('batch')}><span>🥣</span><div><b>이유식 배치 만들기</b><i>구성(재료·g)과 총량 등록 → 냉장 재고</i></div></button>
+            </div>
+          </div>
+        )}
+        {sheet === 'batch' && <BatchSheet onClose={() => setSheet(null)} setApp={setApp} showToast={showToast} />}
+        {sheet === 'meal' && baby && <MealSheet babyId={baby.id} app={app} onClose={() => setSheet(null)} setApp={setApp} showToast={showToast} />}
         {sheet === 'babySwitch' && <BabySwitchSheet babies={babies} activeId={activeBabyId} onPick={id => { setActiveBabyId(id); setSheet(null); }} onClose={() => setSheet(null)} />}
 
         <div className={`toast${toast.show ? ' show' : ''}`}>{toast.msg}</div>
@@ -243,6 +256,17 @@ function HomeScreen({ active, baby, months, stage, app, go }: { active: boolean;
               <div className="meta">
                 <span className="pill">{months != null ? `${months}개월` : ''}</span>
                 <span className="pill pill--stage">이유식 {STAGE_LABELS[stage]}</span>
+                {(() => {
+                  const g = app.growth.length ? app.growth[app.growth.length - 1] : null;
+                  if (!g) return null;
+                  const gd = baby?.gender || 'girl';
+                  const wp = g.weight != null && months != null ? percentileFor('weight', gd, months, g.weight) : null;
+                  const hp = g.height != null && months != null ? percentileFor('height', gd, months, g.height) : null;
+                  return <>
+                    {g.weight != null && <span className="pill">⚖️ {g.weight}kg{wp ? ` · ${Math.round(wp.pct)}%` : ''}</span>}
+                    {g.height != null && <span className="pill">📏 {g.height}cm{hp ? ` · ${Math.round(hp.pct)}%` : ''}</span>}
+                  </>;
+                })()}
               </div>
             </div>
           </div>
@@ -496,17 +520,30 @@ function RecipeScreen({ active, baby, months, stage, app, showToast }: { active:
 }
 
 // ── MEAL LOG ────────────────────────────────────────────────
+function mealEatenG(m: MealLog): number | null {
+  if (m.estimatedIntakeG != null) return m.estimatedIntakeG;
+  if (m.beforeMl != null && m.afterMl != null) return Math.max(0, m.beforeMl - m.afterMl);
+  return null;
+}
+function mealGroups(m: MealLog): Record<FoodGroup, number> {
+  return groupBreakdown(m.composition || [], mealEatenG(m) ?? (m.batchTotalG ?? null), m.batchTotalG ?? null);
+}
+
 function LogScreen({ active, app, openAdd }: { active: boolean; app: AppState; openAdd: () => void }) {
-  const [tab, setTab] = useState<'timeline' | 'album'>('timeline');
+  const [tab, setTab] = useState<'timeline' | 'compose' | 'album'>('timeline');
+  const [expand, setExpand] = useState<string | null>(null);
   const events = [
-    ...app.feedingLogs.map(f => ({ kind: 'feed' as const, date: f.date, time: f.time, id: f.id, ttl: `${f.feedType || '수유'}`, sub: '아기의 기록 연동', amt: f.amount ? `${f.amount}ml` : '', isNew: false })),
+    ...app.feedingLogs.map(f => ({ kind: 'feed' as const, date: f.date, time: f.time, id: f.id, ttl: `${f.feedType || '수유'}`, sub: '아기의 기록 연동', amt: f.amount ? `${f.amount}ml` : '', isNew: false, comp: [] as CompItem[] })),
     ...app.mealLogs.map(m => {
-      const intake = m.beforeMl != null && m.afterMl != null ? Math.max(0, m.beforeMl - m.afterMl) : null;
-      return { kind: 'solid' as const, date: m.date || '', time: m.time, id: m.id, ttl: `${m.menuName || '이유식'} ${ingredientEmoji(m.menuName)}`, sub: `이유식${m.intakeRatio ? ` · ${INTAKE_LABELS[m.intakeRatio]}` : ''}${m.adverseFlag ? ' · ⚠️이상반응' : ''}`, amt: intake != null ? `${intake}ml` : (m.reaction || ''), isNew: m.isNewIngredient };
+      const eaten = mealEatenG(m);
+      const amt = eaten != null ? (m.batchTotalG ? `${eaten}/${m.batchTotalG}g` : `${eaten}g`) : '';
+      return { kind: 'solid' as const, date: m.date || '', time: m.time, id: m.id, ttl: `${m.menuName || '이유식'} ${ingredientEmoji(m.menuName)}`, sub: `이유식${m.adverseFlag ? ' · ⚠️이상반응' : ''}`, amt, isNew: m.isNewIngredient, comp: m.composition || [] };
     }),
   ].sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
   const byDate = events.reduce<Record<string, typeof events>>((acc, e) => { (acc[e.date] ||= []).push(e); return acc; }, {});
   const introduced = Array.from(new Set(app.mealLogs.filter(m => m.newIngredientName).map(m => m.newIngredientName)));
+  const mealsWithComp = app.mealLogs.filter(m => (m.composition || []).length > 0);
+  const totalGrams = mealsWithComp.reduce((acc, m) => { const gb = mealGroups(m); FOOD_GROUPS.forEach(g => acc[g] += gb[g]); return acc; }, { 곡류: 0, 채소: 0, 과일: 0, 단백질: 0, 유제품: 0 } as Record<FoodGroup, number>);
 
   return (
     <section className={`screen${active ? ' is-active' : ''}`}>
@@ -516,9 +553,11 @@ function LogScreen({ active, app, openAdd }: { active: boolean; app: AppState; o
       </div>
       <div className="seg">
         <button className={tab === 'timeline' ? 'is-active' : ''} onClick={() => setTab('timeline')}>타임라인</button>
+        <button className={tab === 'compose' ? 'is-active' : ''} onClick={() => setTab('compose')}>구성·영양</button>
         <button className={tab === 'album' ? 'is-active' : ''} onClick={() => setTab('album')}>사진첩</button>
       </div>
-      {tab === 'timeline' ? (
+
+      {tab === 'timeline' && (
         <div className="log-pane">
           {events.length === 0 && <div className="empty-note">아직 기록이 없어요. + 로 추가해 주세요.</div>}
           {Object.entries(byDate).map(([date, evs]) => (
@@ -526,16 +565,37 @@ function LogScreen({ active, app, openAdd }: { active: boolean; app: AppState; o
               <div className="log-date"><span className="day">{date === todayStr() ? '오늘' : date}</span></div>
               <div className="tl-list">
                 {evs.map(e => (
-                  <div key={e.kind + e.id} className={`tl-event${e.kind === 'feed' ? ' tl-event--milk' : ''}`}>
+                  <div key={e.kind + e.id} className={`tl-event${e.kind === 'feed' ? ' tl-event--milk' : ''}`} onClick={() => e.comp.length && setExpand(expand === e.id ? null : e.id)} style={{ cursor: e.comp.length ? 'pointer' : 'default' }}>
                     <div className="time">{e.time || ''}</div>
                     <div className="dot-wrap"><span className={`e-dot ${e.kind === 'feed' ? 'feed' : 'solid'}`} /></div>
-                    <div><div className="ttl">{e.ttl}{e.isNew && <span className="new-chip">새 재료</span>}</div><div className="sub">{e.sub}</div></div>
+                    <div><div className="ttl">{e.ttl}{e.isNew && <span className="new-chip">새 재료</span>}</div><div className="sub">{expand === e.id && e.comp.length ? e.comp.map(c => `${c.name} ${c.amountG}g`).join(' · ') : e.sub}</div></div>
                     <span className={`amt${e.kind === 'feed' ? ' amt--milk' : ''}`}>{e.amt}</span>
                   </div>
                 ))}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {tab === 'compose' && (
+        <div className="log-pane">
+          <div className="section">
+            <div className="section-head"><h3 className="h3">식품군 비율 (누적)</h3></div>
+            {FOOD_GROUPS.some(g => totalGrams[g] > 0)
+              ? <div className="growth-card"><GroupBars grams={totalGrams} /></div>
+              : <div className="empty-note">구성이 있는 끼니를 기록하면 곡류·채소·과일·단백질 비율을 보여드려요.</div>}
+          </div>
+          <div className="section">
+            <div className="section-head"><h3 className="h3">끼니별 구성</h3></div>
+            {mealsWithComp.length === 0 ? <div className="empty-note">배치를 만들어 끼니를 기록해 보세요.</div> : mealsWithComp.slice(0, 20).map(m => (
+              <div key={m.id} className="section-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}><b>{m.menuName}</b><span className="muted" style={{ fontSize: 12 }}>{m.date} · {mealEatenG(m) != null ? `${mealEatenG(m)}${m.batchTotalG ? `/${m.batchTotalG}` : ''}g` : ''}</span></div>
+                <div className="comp-summary">{(m.composition || []).map(c => `${c.name} ${c.amountG}g`).join(' · ')}</div>
+                <GroupBars grams={mealGroups(m)} />
+              </div>
+            ))}
+          </div>
           {introduced.length > 0 && (
             <div className="ingredient-history">
               <div className="section-head"><h3 className="h3">도입한 재료</h3></div>
@@ -543,7 +603,9 @@ function LogScreen({ active, app, openAdd }: { active: boolean; app: AppState; o
             </div>
           )}
         </div>
-      ) : (
+      )}
+
+      {tab === 'album' && (
         <div className="log-pane">
           <div className="empty-note">끼니 사진 기능은 준비 중이에요. 곧 성장 기록·진료 리포트에 함께 담을 수 있어요.</div>
         </div>
@@ -560,7 +622,10 @@ const DEV_ITEMS = [
   { id: 'sit', t: '지지하면 앉을 수 있어요', d: '중기 이유식 진입 신호' },
 ];
 
-function BabyScreen({ active, baby, babies, months, stage, growth, setApp, showToast, setActiveBabyId }: { active: boolean; baby: Baby | null; babies: Baby[]; months: number | null; stage: Stage; growth: Growth[]; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void; setActiveBabyId: (id: number) => void }) {
+function BabyScreen({ active, baby, babies, months, stage, growth, mealLogs, setApp, showToast, setActiveBabyId }: { active: boolean; baby: Baby | null; babies: Baby[]; months: number | null; stage: Stage; growth: Growth[]; mealLogs: MealLog[]; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void; setActiveBabyId: (id: number) => void }) {
+  const grpTotals = mealLogs.filter(m => (m.composition || []).length > 0).reduce((acc, m) => { const gb = mealGroups(m); FOOD_GROUPS.forEach(g => acc[g] += gb[g]); return acc; }, { 곡류: 0, 채소: 0, 과일: 0, 단백질: 0, 유제품: 0 } as Record<FoodGroup, number>);
+  const hasGrp = FOOD_GROUPS.some(g => grpTotals[g] > 0);
+  const proteinLow = hasGrp && (grpTotals['단백질'] / FOOD_GROUPS.reduce((s, g) => s + grpTotals[g], 0)) < 0.12;
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [growthSheet, setGrowthSheet] = useState(false);
   const done = Object.values(checks).filter(Boolean).length;
@@ -607,8 +672,20 @@ function BabyScreen({ active, baby, babies, months, stage, growth, setApp, showT
       <div className="baby-section">
         <div className="section-head"><h3 className="h3">섭취 적정성 평가</h3></div>
         <div className="assess-card">
-          <div className="empty-note" style={{ padding: '8px 0 12px' }}>수유량과 이유식 섭취가 쌓이면 주간 적정성·유즙/이유식 비율을 평가해 드려요. (평가 모듈 준비중)</div>
-          <p className="assess-guard">추정치를 포함한 참고 정보예요. 정확한 판단은 소아과 상담을 권해요.</p>
+          {hasGrp ? (
+            <>
+              <div className="ratio-lbl" style={{ marginBottom: 8 }}>이유식 식품군 구성 (누적 섭취량 기준)</div>
+              <GroupBars grams={grpTotals} />
+              <div className="assess-llm" style={{ paddingBottom: 4 }}>
+                {proteinLow
+                  ? <div className="llm-line watch"><span>🟡</span><div><b>살펴볼 점</b> — 단백질(고기·생선·달걀·콩) 비중이 낮아요. 철분 보충을 위해 소고기·달걀노른자를 조금씩 늘려봐요.</div></div>
+                  : <div className="llm-line ok"><span>🟢</span><div><b>잘 되고 있는 점</b> — 곡류·채소·단백질이 고르게 들어가고 있어요.</div></div>}
+              </div>
+            </>
+          ) : (
+            <div className="empty-note" style={{ padding: '8px 0 12px' }}>배치를 만들어 끼니를 기록하면 곡류·채소·과일·단백질 구성 비율을 평가해 드려요.</div>
+          )}
+          <p className="assess-guard">추정치를 포함한 참고 정보예요. 식품군 권장비율은 검증 중이며, 정확한 판단은 소아과 상담을 권해요.</p>
         </div>
       </div>
 
@@ -792,46 +869,130 @@ function PantrySheet({ onClose, setApp, showToast, initial }: { onClose: () => v
   );
 }
 
-function MealSheet({ babyId, onClose, setApp, showToast }: { babyId: number; onClose: () => void; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void }) {
+function compGroup(name: string): FoodGroup | null { return ingredientGroup(name, REF.find(x => x.name === name.trim())?.category); }
+
+function CompositionBuilder({ rows, setRows }: { rows: CompItem[]; setRows: (r: CompItem[]) => void }) {
+  const total = rows.reduce((s, r) => s + (r.amountG || 0), 0);
+  const upd = (i: number, patch: Partial<CompItem>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const add = (name = '') => setRows([...rows, { name, amountG: 0, group: compGroup(name) }]);
+  return (
+    <div>
+      {rows.map((r, i) => (
+        <div key={i} className="comp-row">
+          <input list="ing-list" placeholder="재료" value={r.name} onChange={e => upd(i, { name: e.target.value, group: compGroup(e.target.value) })} />
+          <input type="number" inputMode="numeric" placeholder="g" value={r.amountG || ''} onChange={e => upd(i, { amountG: Number(e.target.value) })} />
+          <span className="comp-tag">{r.group || (/물|육수/.test(r.name) ? '물' : '')}</span>
+          <button className="comp-x" onClick={() => setRows(rows.filter((_, j) => j !== i))}>✕</button>
+        </div>
+      ))}
+      <div className="comp-foot">
+        <button className="chip-pick" onClick={() => add()}>+ 재료</button>
+        <button className="chip-pick" onClick={() => add('물')}>+ 물</button>
+        <span className="comp-total">총 {total}g</span>
+      </div>
+      <datalist id="ing-list">{REF.map(r => <option key={r.name} value={r.name} />)}</datalist>
+    </div>
+  );
+}
+
+function GroupBars({ grams }: { grams: Record<FoodGroup, number> }) {
+  const shown = FOOD_GROUPS.filter(g => grams[g] > 0);
+  const total = shown.reduce((s, g) => s + grams[g], 0);
+  if (total <= 0) return null;
+  return (
+    <div>
+      <div className="grp-ratio">{shown.map(g => <span key={g} style={{ width: `${(grams[g] / total) * 100}%`, background: GROUP_COLORS[g] }}>{grams[g] / total >= 0.14 ? g : ''}</span>)}</div>
+      <div className="grp-legend">{shown.map(g => <span key={g}><i style={{ background: GROUP_COLORS[g] }} />{g} {Math.round(grams[g])}g</span>)}</div>
+    </div>
+  );
+}
+
+function BatchSheet({ onClose, setApp, showToast }: { onClose: () => void; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void }) {
+  const [name, setName] = useState('');
+  const [rows, setRows] = useState<CompItem[]>([{ name: '쌀가루', amountG: 0, group: '곡류' }, { name: '물', amountG: 0, group: null }]);
+  const total = rows.reduce((s, r) => s + (r.amountG || 0), 0);
+  function save() {
+    const comp = rows.filter(r => r.name.trim() && r.amountG > 0).map(r => ({ name: r.name.trim(), amountG: r.amountG, group: compGroup(r.name) }));
+    if (comp.length === 0) { showToast('구성을 입력해 주세요'); return; }
+    const title = name.trim() || (comp.filter(c => c.group).map(c => c.name).slice(0, 3).join(' ') + ' 이유식');
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    const item: PantryItem = { id: uid(), kind: 'prepared', name: title, category: null, storage: 'fridge', quantity: null, unit: null, cubeCount: null, cubeVolumeMl: null, cubeUnit: 'ml', recipeRef: null, purchaseDate: null, openDate: null, cookedDate: todayStr(), expiryDate: d.toISOString().slice(0, 10), forBabyId: null, note: '', composition: comp, totalG: total, remainingG: total };
+    setApp(s => ({ ...s, pantry: [item, ...s.pantry] }));
+    fetch('/api/pantry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) }).catch(console.error);
+    showToast('이유식 배치를 만들었어요'); onClose();
+  }
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="sheet" onClick={e => e.stopPropagation()}>
+        <h3>이유식 배치 만들기</h3>
+        <div className="field"><label>이름 (선택)</label><input value={name} onChange={e => setName(e.target.value)} placeholder="예: 소고기 애호박죽" /></div>
+        <div className="field"><label>구성 (재료 · g)</label><CompositionBuilder rows={rows} setRows={setRows} /></div>
+        <p className="disclaimer" style={{ textAlign: 'left', padding: 0 }}>물은 총량에 포함되지만 식품군·영양 비율에선 제외돼요. 냉장 이유식 재고로 등록됩니다.</p>
+        <button className="btn-orange btn-full" onClick={save}>배치 만들기 ({total}g)</button>
+      </div>
+    </div>
+  );
+}
+
+function MealSheet({ babyId, app, onClose, setApp, showToast }: { babyId: number; app: AppState; onClose: () => void; setApp: React.Dispatch<React.SetStateAction<AppState>>; showToast: (m: string) => void }) {
+  const batches = app.pantry.filter(p => p.kind === 'prepared' && (p.remainingG ?? 0) > 0);
+  const [batchId, setBatchId] = useState<string>(batches[0]?.id || '');
+  const [directRows, setDirectRows] = useState<CompItem[]>([{ name: '', amountG: 0, group: null }]);
   const [menuName, setMenuName] = useState('');
-  const [intakeRatio, setIntakeRatio] = useState<IntakeRatio>('all');
+  const [eaten, setEaten] = useState('');
   const [reaction, setReaction] = useState('');
   const [adverseFlag, setAdverseFlag] = useState(false);
-  const [before, setBefore] = useState('');
-  const [after, setAfter] = useState('');
+  const [newIng, setNewIng] = useState('');
   const now = new Date();
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const beforeN = before === '' ? null : Number(before);
-  const afterN = after === '' ? null : Number(after);
-  const intakeMl = beforeN != null && afterN != null ? Math.max(0, beforeN - afterN) : null;
-  // 눈금 입력이 있으면 섭취 비율 자동 판정
-  const autoRatio: IntakeRatio | null = (intakeMl != null && beforeN) ? (() => {
-    const r = intakeMl / beforeN;
-    return r >= 0.9 ? 'all' : r >= 0.4 ? 'half' : r > 0 ? 'little' : 'refused';
-  })() : null;
+  const batch = batches.find(b => b.id === batchId) || null;
+  const comp: CompItem[] = batch ? (batch.composition || []) : directRows;
+  const total = batch ? (batch.totalG ?? 0) : comp.reduce((s, r) => s + (r.amountG || 0), 0);
+  const eatenN = eaten === '' ? null : Number(eaten);
+  const grams = groupBreakdown(comp, eatenN ?? total, total);
+
   function save() {
-    if (!menuName.trim()) { showToast('메뉴를 입력해 주세요'); return; }
-    const m: MealLog = { id: uid(), babyId, date: todayStr(), time, menuName: menuName.trim(), recipeRef: null, intakeRatio: autoRatio || intakeRatio, estimatedKcal: null, reaction: reaction.trim(), adverseFlag, adverseNote: '', isNewIngredient: false, newIngredientName: '', beforeMl: beforeN, afterMl: afterN };
-    setApp(s => ({ ...s, mealLogs: [m, ...s.mealLogs] }));
+    const compClean = comp.filter(r => r.name.trim() && r.amountG > 0).map(r => ({ name: r.name.trim(), amountG: r.amountG, group: compGroup(r.name) }));
+    const name = batch ? batch.name : (menuName.trim() || compClean.filter(c => c.group).map(c => c.name).slice(0, 3).join(' ') || '이유식');
+    if (!batch && compClean.length === 0 && !menuName.trim()) { showToast('배치를 선택하거나 구성을 입력해 주세요'); return; }
+    const m: MealLog = {
+      id: uid(), babyId, date: todayStr(), time, menuName: name, recipeRef: null, intakeRatio: null,
+      estimatedKcal: null, estimatedIntakeG: eatenN, reaction: reaction.trim(), adverseFlag, adverseNote: '',
+      isNewIngredient: !!newIng.trim(), newIngredientName: newIng.trim(), beforeMl: null, afterMl: null,
+      composition: compClean, batchTotalG: total || null, batchRef: batch?.id || null,
+    };
+    setApp(s => {
+      const pantry = batch && eatenN ? s.pantry.map(p => (p.id === batch.id ? { ...p, remainingG: Math.max(0, (p.remainingG ?? total) - eatenN) } : p)) : s.pantry;
+      return { ...s, mealLogs: [m, ...s.mealLogs], pantry };
+    });
     fetch('/api/meal-logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(m) }).catch(console.error);
+    if (batch && eatenN) fetch(`/api/pantry/${batch.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ remainingG: Math.max(0, (batch.remainingG ?? total) - eatenN) }) }).catch(console.error);
     showToast('식사를 기록했어요'); onClose();
   }
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="sheet" onClick={e => e.stopPropagation()}>
-        <h3>이유식 기록</h3>
-        <div className="field"><label>메뉴</label><input value={menuName} onChange={e => setMenuName(e.target.value)} placeholder="예: 소고기 애호박죽" /></div>
-        <div className="field"><label>눈금으로 먹은 양 계산 (선택)</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input type="number" inputMode="numeric" value={before} onChange={e => setBefore(e.target.value)} placeholder="식사 전 ml" />
-            <input type="number" inputMode="numeric" value={after} onChange={e => setAfter(e.target.value)} placeholder="남긴 양 ml" />
+        <h3>끼니 기록</h3>
+        <div className="field"><label>이유식 배치</label>
+          <div className="chips-row">
+            {batches.map(b => <button key={b.id} className={`chip-pick${batchId === b.id ? ' on' : ''}`} onClick={() => setBatchId(b.id)}>{b.name} · 남은 {b.remainingG ?? b.totalG}g</button>)}
+            <button className={`chip-pick${batchId === '' ? ' on' : ''}`} onClick={() => setBatchId('')}>직접 입력</button>
           </div>
-          {intakeMl != null && <div className="intake-calc">🍽 먹은 양 <b>{intakeMl}ml</b>{autoRatio ? ` · ${INTAKE_LABELS[autoRatio]}` : ''}</div>}
         </div>
-        {intakeMl == null && <div className="field"><label>섭취량</label><div className="chips-row">{(['all', 'half', 'little', 'refused'] as IntakeRatio[]).map(r => <button key={r} className={`chip-pick${intakeRatio === r ? ' on' : ''}`} onClick={() => setIntakeRatio(r)}>{INTAKE_LABELS[r]}</button>)}</div></div>}
+        {!batch && (
+          <>
+            <div className="field"><label>메뉴 이름 (선택)</label><input value={menuName} onChange={e => setMenuName(e.target.value)} placeholder="예: 소고기 애호박죽" /></div>
+            <div className="field"><label>구성 (재료 · g)</label><CompositionBuilder rows={directRows} setRows={setDirectRows} /></div>
+          </>
+        )}
+        <div className="field"><label>이번 끼니 먹은 양 (g){total ? ` · 배치 총 ${total}g` : ''}</label><input type="number" inputMode="numeric" value={eaten} onChange={e => setEaten(e.target.value)} placeholder={batch ? String(Math.min(batch.remainingG ?? total, total)) : String(total || 70)} /></div>
+        {(eatenN ?? total) > 0 && FOOD_GROUPS.some(g => grams[g] > 0) && (
+          <div className="field"><label>이번 끼니 식품군</label><GroupBars grams={grams} /></div>
+        )}
+        <div className="field"><label>처음 먹인 재료 (선택)</label><input value={newIng} onChange={e => setNewIng(e.target.value)} placeholder="예: 소고기 (3일 관찰)" /></div>
         <div className="field"><label>반응 메모</label><textarea value={reaction} onChange={e => setReaction(e.target.value)} placeholder="잘 먹었어요 / 입에 안 맞아 했어요" /></div>
         <div className="field"><label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}><input type="checkbox" checked={adverseFlag} onChange={e => setAdverseFlag(e.target.checked)} style={{ width: 'auto' }} />이상반응(발진·구토·설사 등)이 있었어요</label></div>
-        <button className="btn-orange btn-full" onClick={save}>기록하기</button>
+        <button className="btn-orange btn-full" onClick={save}>기록하기{eatenN ? ` (${eatenN}g)` : ''}</button>
       </div>
     </div>
   );

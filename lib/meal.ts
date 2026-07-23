@@ -98,6 +98,36 @@ export function ingredientEmoji(name: string): string {
   return '🥣';
 }
 
+// ── 식품군 ──────────────────────────────────────────────────
+export type FoodGroup = '곡류' | '채소' | '과일' | '단백질' | '유제품';
+export const FOOD_GROUPS: FoodGroup[] = ['곡류', '채소', '과일', '단백질', '유제품'];
+export const GROUP_COLORS: Record<FoodGroup, string> = {
+  곡류: 'var(--orange-400)', 채소: 'var(--green-400)', 과일: 'var(--pink-400)', 단백질: 'var(--blue-400)', 유제품: 'var(--orange-200)',
+};
+const CATEGORY_TO_GROUP: Record<string, FoodGroup> = {
+  곡류: '곡류', 채소: '채소', 과일: '과일', 육류: '단백질', 어류: '단백질', 난류: '단백질', 콩류: '단백질', 유제품: '유제품',
+};
+
+/** 재료명 → 식품군 (물·기타·미분류는 null = 비율에서 제외) */
+export function ingredientGroup(name: string, category?: string | null): FoodGroup | null {
+  if (/물|육수|다시/.test(name)) return null;
+  if (category && CATEGORY_TO_GROUP[category]) return CATEGORY_TO_GROUP[category];
+  return null;
+}
+
+export interface CompItem { name: string; amountG: number; group?: FoodGroup | null }
+
+/** 배치 구성 + 먹은g/총g → 식품군별 섭취 g (물·기타 제외) */
+export function groupBreakdown(comp: CompItem[], eatenG: number | null, totalG: number | null): Record<FoodGroup, number> {
+  const out = { 곡류: 0, 채소: 0, 과일: 0, 단백질: 0, 유제품: 0 } as Record<FoodGroup, number>;
+  const frac = eatenG != null && totalG ? eatenG / totalG : 1;
+  for (const it of comp) {
+    const g = it.group ?? ingredientGroup(it.name);
+    if (g) out[g] += (it.amountG || 0) * frac;
+  }
+  return out;
+}
+
 /** 두 날짜 사이 개월수(소수) — 측정일 기준 아기 월령 계산용 */
 export function monthsBetween(birthStr: string, dateStr: string): number {
   const [by, bm, bd] = birthStr.split('-').map(Number);
